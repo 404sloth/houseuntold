@@ -1,0 +1,630 @@
+{
+  "users": [
+    {
+      "id": "usr_patron_01",
+      "name": "Arjun Mehta",
+      "email": "arjun.mehta@gmail.com",
+      "phone": "+91 98204 11220",
+      "phoneVerified": true,
+      "role": "USER",
+      "age": 27
+    },
+    {
+      "id": "usr_admin_01",
+      "name": "Meera Nair",
+      "email": "meera@venu.live",
+      "phone": "+91 98111 40201",
+      "phoneVerified": true,
+      "role": "ADMIN",
+      "age": 34
+    },
+    {
+      "id": "usr_scanner_01",
+      "name": "Rohan Kulkarni",
+      "email": "gate01@venu.live",
+      "phone": "+91 98200 77812",
+      "phoneVerified": true,
+      "role": "SCANNER",
+      "age": 26
+    },
+    {
+      "id": "usr_bartender_01",
+      "name": "Karan S.",
+      "email": "bar04@venu.live",
+      "phone": "+91 98209 33104",
+      "phoneVerified": true,
+      "role": "BARTENDER",
+      "age": 29
+    }
+  ],
+  "events": [
+    {
+      "id": "evt_anoushka_strings",
+      "slug": "anoushka-shankar-guildhall-strings",
+      "title": "Anoushka Shankar & Guildhall Strings",
+      "subtitle": "An unforgettable evening of North Indian classical raga intertwined with lush 24-piece British orchestral arrangements.",
+      "category": "Live Music",
+      "dateLabel": "Fri, 28 Nov 2026",
+      "timeLabel": "19:30 IST",
+      "startsAt": "2026-11-28T19:30:00+05:30",
+      "doorsOpenLabel": "Doors open 18:45",
+      "venueName": "Royal Opera House",
+      "venueCity": "Mumbai",
+      "venueAddress": "Mama Parmanand Marg, Girgaon, Mumbai 400004",
+      "transitNote": "Charni Road Station (8 min walk) · Valet parking at Gate 2",
+      "layoutType": "PROSCENIUM",
+      "status": "ON_SALE",
+      "imageUrl": "/src/assets/images/event_sitar_concert_1795083609947.jpg",
+      "startingPrice": 1200,
+      "maxPrice": 1800,
+      "fnbCreditPerVip": 600,
+      "totalSeats": 48,
+      "bookedSeats": 14,
+      "grossRevenue": 2480500,
+      "admittedToday": 412,
+      "aboutParagraphs": [
+        "Experience the luminous synthesis of sitar virtuosity and chamber strings inside Mumbai's restored 1916 Baroque acoustic hall. Performing movements from her acclaimed studio repertoire alongside newly commissioned string arrangements, Anoushka Shankar leads an intimate 90-minute uninterrupted recital.",
+        "Every VIP and Couple Lounge pass includes pre-loaded F&B wallet credits redeemable seamlessly at the courtyard conservatory bar."
+      ],
+      "highlights": [
+        { "title": "24-Piece Strings", "detail": "Live acoustic chamber accompaniment" },
+        { "title": "Heritage Acoustics", "detail": "Unamplified wood-paneled hall" },
+        { "title": "F&B Wallet Included", "detail": "Instant bar credits on VIP passes" },
+        { "title": "Mobile Entry", "detail": "HMAC-Signed QR check-in at Gate A" }
+      ],
+      "artists": [
+        {
+          "name": "Anoushka Shankar",
+          "role": "Sitar & Lead Composer",
+          "bio": "Eleven-time Grammy nominee bridging classical Indian ragas with contemporary orchestration."
+        },
+        {
+          "name": "Julian Sterling",
+          "role": "Conductor",
+          "bio": "Principal guest conductor across London and Vienna chamber ensembles."
+        },
+        {
+          "name": "Guildhall Strings",
+          "role": "Chamber Ensemble",
+          "bio": "London's premier string collective known for expressive acoustic crossovers."
+        }
+      ],
+      "sections": [
+        {
+          "id": "sec_couple",
+          "name": "Couple Lounge",
+          "tier": "COUPLE",
+          "price": 1500,
+          "fnbCredit": 400,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Elevated velvet box seating with table service"
+        },
+        {
+          "id": "sec_vip",
+          "name": "VIP / Stage",
+          "tier": "VIP",
+          "price": 1800,
+          "fnbCredit": 600,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Front 2 orchestra rows with priority conservatory bar access"
+        },
+        {
+          "id": "sec_general",
+          "name": "General",
+          "tier": "GENERAL",
+          "price": 1200,
+          "fnbCredit": 0,
+          "isAlcoholic": false,
+          "minAge": 0,
+          "description": "Grand Dress Circle & Balcony acoustic seating (All Ages)"
+        }
+      ]
+    },
+    {
+      "id": "evt_subzero_dj",
+      "slug": "sub-zero-sessions-dj-arjun",
+      "title": "Sub-Zero Sessions ft. DJ Arjun & Lost Frequencies",
+      "subtitle": "Deep melodic house and modular synthesizer sets inside an acoustically treated architectural warehouse.",
+      "category": "Lounge Sessions",
+      "dateLabel": "Sat, 29 Nov 2026",
+      "timeLabel": "21:30 IST",
+      "startsAt": "2026-11-29T21:30:00+05:30",
+      "doorsOpenLabel": "Doors open 21:00",
+      "venueName": "Bandra Warehouse Studio",
+      "venueCity": "Mumbai",
+      "venueAddress": "Chapel Road, Ranwar, Bandra West, Mumbai 400050",
+      "transitNote": "Bandra Station (10 min drive) · Dedicated ride-share bay at Gate 1",
+      "layoutType": "CLUB",
+      "status": "ALMOST_FULL",
+      "imageUrl": "/src/assets/images/event_dj_club_1795083466509.jpg",
+      "startingPrice": 1200,
+      "maxPrice": 2400,
+      "fnbCreditPerVip": 800,
+      "totalSeats": 32,
+      "bookedSeats": 12,
+      "grossRevenue": 1140200,
+      "admittedToday": 0,
+      "aboutParagraphs": [
+        "A calibrated club-floor listening session built around a custom quadraphonic Meyer Sound array. Choose between raised VIP Booths flanking the DJ console, intimate Couple Lounges, or Central Dance Floor entry.",
+        "Strict 21+ age verification applies to VIP Booths and Couple Lounge tables serving craft cocktails."
+      ],
+      "highlights": [
+        { "title": "Quadraphonic Sound", "detail": "Calibrated 360-degree studio audio" },
+        { "title": "Reserved Booths", "detail": "Dedicated bottle & bar service" },
+        { "title": "F&B Wallet Included", "detail": "₹800 pre-loaded bar balance on VIP" },
+        { "title": "Fast-Track Entry", "detail": "Instant QR verification at North Door" }
+      ],
+      "artists": [
+        {
+          "name": "DJ Arjun",
+          "role": "Headline Selector",
+          "bio": "Minimalist progressive selector known for 4-hour vinyl and modular sets."
+        },
+        {
+          "name": "Lost Frequencies",
+          "role": "Guest Live Act",
+          "bio": "Melodic electronic producer blending organic instrumentation with analog basslines."
+        },
+        {
+          "name": "Rhea Kapoor",
+          "role": "Opening Set",
+          "bio": "Resident ambient and deep-house selector at Bandra Warehouse."
+        }
+      ],
+      "sections": [
+        {
+          "id": "sec_club_vip",
+          "name": "VIP Booth",
+          "tier": "VIP",
+          "price": 2400,
+          "fnbCredit": 800,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Elevated booth flanking the DJ console with ₹800 bar credit"
+        },
+        {
+          "id": "sec_club_couple",
+          "name": "Couple Zone",
+          "tier": "COUPLE",
+          "price": 1800,
+          "fnbCredit": 500,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Reserved perimeter lounge table for two with ₹500 bar credit"
+        },
+        {
+          "id": "sec_club_general",
+          "name": "Dance Floor",
+          "tier": "GENERAL",
+          "price": 1200,
+          "fnbCredit": 0,
+          "isAlcoholic": false,
+          "minAge": 18,
+          "description": "Central acoustic floor access (Non-alcoholic ticket tier)"
+        }
+      ]
+    },
+    {
+      "id": "evt_virdas_comedy",
+      "slug": "vir-das-mindful-mistake",
+      "title": "Vir Das: The Mindful Mistake (Unplugged)",
+      "subtitle": "A razor-sharp 80-minute work-in-progress comedy hour recorded live in an intimate 200-seat cabaret room.",
+      "category": "Stand-up Comedy",
+      "dateLabel": "Sun, 30 Nov 2026",
+      "timeLabel": "20:00 IST",
+      "startsAt": "2026-11-30T20:00:00+05:30",
+      "doorsOpenLabel": "Doors open 19:15",
+      "venueName": "The Habitat Studio",
+      "venueCity": "Mumbai",
+      "venueAddress": "Hotel Unicontinental, Khar West, Mumbai 400052",
+      "transitNote": "Khar Road Station (3 min walk) · Paid basement parking available",
+      "layoutType": "PROSCENIUM",
+      "status": "ON_SALE",
+      "imageUrl": "/src/assets/images/event_comedy_stage_1795083465583.jpg",
+      "startingPrice": 999,
+      "maxPrice": 1800,
+      "fnbCreditPerVip": 400,
+      "totalSeats": 48,
+      "bookedSeats": 10,
+      "grossRevenue": 864000,
+      "admittedToday": 0,
+      "aboutParagraphs": [
+        "No phones, no cameras, just unvarnished storytelling. Vir Das returns to his favorite intimate room to test brand-new material ahead of his global theater tour.",
+        "Cabaret tables and front-row seats place you feet away from the microphone."
+      ],
+      "highlights": [
+        { "title": "Intimate Cabaret", "detail": "Zero bad sightlines in the room" },
+        { "title": "Phone-Free Room", "detail": "Sealed pouches provided at entry" },
+        { "title": "F&B Table Service", "detail": "Redeem F&B wallet directly at tables" },
+        { "title": "Instant Mobile Pass", "detail": "Zero physical box-office queues" }
+      ],
+      "artists": [
+        {
+          "name": "Vir Das",
+          "role": "Headliner",
+          "bio": "International Emmy-winning comedian and creator of five Netflix specials."
+        },
+        {
+          "name": "Sumukhi Suresh",
+          "role": "Guest Host",
+          "bio": "Writer, stand-up comic, and curator of Mumbai's sharpest alt-comedy nights."
+        },
+        {
+          "name": "Aadar Malik",
+          "role": "Musical Opener",
+          "bio": "Acoustic comedy songwriter and improv mainstay."
+        }
+      ],
+      "sections": [
+        {
+          "id": "sec_comedy_vip",
+          "name": "VIP Front Row",
+          "tier": "VIP",
+          "price": 1800,
+          "fnbCredit": 400,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Front-row cabaret seating with ₹400 bar credit"
+        },
+        {
+          "id": "sec_comedy_couple",
+          "name": "Couple Table",
+          "tier": "COUPLE",
+          "price": 1450,
+          "fnbCredit": 300,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Reserved two-top cabaret table"
+        },
+        {
+          "id": "sec_comedy_general",
+          "name": "General",
+          "tier": "GENERAL",
+          "price": 999,
+          "fnbCredit": 0,
+          "isAlcoholic": false,
+          "minAge": 16,
+          "description": "Tiered theater seating (Non-alcoholic zone)"
+        }
+      ]
+    },
+    {
+      "id": "evt_qawwali_courtyard",
+      "slug": "waqar-khan-in-the-mood-for-love",
+      "title": "Waqar Khan: In the Mood for Love (Acoustic)",
+      "subtitle": "Traditional qawwali, harmonium ballads, and acoustic guitar under open twilight arches.",
+      "category": "Theater & Plays",
+      "dateLabel": "Fri, 05 Dec 2026",
+      "timeLabel": "19:00 IST",
+      "startsAt": "2026-12-05T19:00:00+05:30",
+      "doorsOpenLabel": "Doors open 18:15",
+      "venueName": "Ballard Estate Courtyard",
+      "venueCity": "Mumbai",
+      "venueAddress": "14 Calicut Street, Ballard Estate, Fort, Mumbai 400001",
+      "transitNote": "CSMT Station (10 min walk) · Street parking along Sprott Road",
+      "layoutType": "PROSCENIUM",
+      "status": "ON_SALE",
+      "imageUrl": "/src/assets/images/event_qawwali_live_1795083463810.jpg",
+      "startingPrice": 950,
+      "maxPrice": 1650,
+      "fnbCreditPerVip": 350,
+      "totalSeats": 48,
+      "bookedSeats": 8,
+      "grossRevenue": 542000,
+      "admittedToday": 0,
+      "aboutParagraphs": [
+        "Set inside a 1920s sandstone courtyard lit by warm Edison festoons, Waqar Khan's ensemble strips classic Sufi compositions down to harmonium, tabla, and raw vocal harmony.",
+        "Ideal for families and music purists alike, with dedicated All-Ages acoustic seating."
+      ],
+      "highlights": [
+        { "title": "Open-Air Courtyard", "detail": "Historic sandstone acoustics" },
+        { "title": "All-Ages Friendly", "detail": "Dedicated non-alcoholic family tiers" },
+        { "title": "Artisanal Chai Bar", "detail": "Redeem F&B credits at the patio" },
+        { "title": "Curated Seating", "detail": "Cushioned teak amphitheater chairs" }
+      ],
+      "artists": [
+        {
+          "name": "Waqar Khan",
+          "role": "Lead Vocalist & Guitar",
+          "bio": "Vocalist blending classical Hindustani phrasing with acoustic folk."
+        },
+        {
+          "name": "Farhan Ali",
+          "role": "Tabla & Percussion",
+          "bio": "Fourth-generation percussionist from the Delhi gharana."
+        },
+        {
+          "name": "Zoya Mirza",
+          "role": "Harmonium",
+          "bio": "Arranger and multi-instrumentalist specializing in courtyard ensembles."
+        }
+      ],
+      "sections": [
+        {
+          "id": "sec_qaw_vip",
+          "name": "VIP Patio",
+          "tier": "VIP",
+          "price": 1650,
+          "fnbCredit": 350,
+          "isAlcoholic": true,
+          "minAge": 21,
+          "description": "Front courtyard rows with artisanal beverage credit"
+        },
+        {
+          "id": "sec_qaw_couple",
+          "name": "Couple Arch",
+          "tier": "COUPLE",
+          "price": 1350,
+          "fnbCredit": 250,
+          "isAlcoholic": false,
+          "minAge": 0,
+          "description": "Shaded arcade seating for two (All Ages)"
+        },
+        {
+          "id": "sec_qaw_general",
+          "name": "General",
+          "tier": "GENERAL",
+          "price": 950,
+          "fnbCredit": 0,
+          "isAlcoholic": false,
+          "minAge": 0,
+          "description": "Amphitheater risers (All Ages)"
+        }
+      ]
+    }
+  ],
+  "seats": [
+    { "id": "seat_a1_1", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 1, "label": "A-1", "tier": "VIP", "status": "SOLD", "x": 1, "y": 1 },
+    { "id": "seat_a1_2", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 2, "label": "A-2", "tier": "VIP", "status": "SOLD", "x": 2, "y": 1 },
+    { "id": "seat_a1_3", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 3, "label": "A-3", "tier": "VIP", "status": "AVAILABLE", "x": 3, "y": 1 },
+    { "id": "seat_a1_4", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 4, "label": "A-4", "tier": "VIP", "status": "AVAILABLE", "x": 4, "y": 1 },
+    { "id": "seat_a1_5", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 5, "label": "A-5", "tier": "VIP", "status": "HELD", "x": 5, "y": 1 },
+    { "id": "seat_a1_6", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 6, "label": "A-6", "tier": "VIP", "status": "AVAILABLE", "x": 6, "y": 1 },
+    { "id": "seat_a1_7", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 7, "label": "A-7", "tier": "VIP", "status": "AVAILABLE", "x": 7, "y": 1 },
+    { "id": "seat_a1_8", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "A", "number": 8, "label": "A-8", "tier": "VIP", "status": "SOLD", "x": 8, "y": 1 },
+
+    { "id": "seat_b1_1", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 1, "label": "B-1", "tier": "VIP", "status": "AVAILABLE", "x": 1, "y": 2, "conflictDemo": true },
+    { "id": "seat_b1_2", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 2, "label": "B-2", "tier": "VIP", "status": "AVAILABLE", "x": 2, "y": 2 },
+    { "id": "seat_b1_3", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 3, "label": "B-3", "tier": "VIP", "status": "AVAILABLE", "x": 3, "y": 2 },
+    { "id": "seat_b1_4", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 4, "label": "B-4", "tier": "VIP", "status": "SOLD", "x": 4, "y": 2 },
+    { "id": "seat_b1_5", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 5, "label": "B-5", "tier": "VIP", "status": "SOLD", "x": 5, "y": 2 },
+    { "id": "seat_b1_6", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 6, "label": "B-6", "tier": "VIP", "status": "AVAILABLE", "x": 6, "y": 2 },
+    { "id": "seat_b1_7", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 7, "label": "B-7", "tier": "VIP", "status": "AVAILABLE", "x": 7, "y": 2 },
+    { "id": "seat_b1_8", "eventId": "evt_anoushka_strings", "sectionId": "sec_vip", "row": "B", "number": 8, "label": "B-8", "tier": "VIP", "status": "AVAILABLE", "x": 8, "y": 2 },
+
+    { "id": "seat_c1_1", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 1, "label": "C-1", "tier": "COUPLE", "status": "AVAILABLE", "x": 1, "y": 3 },
+    { "id": "seat_c1_2", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 2, "label": "C-2", "tier": "COUPLE", "status": "AVAILABLE", "x": 2, "y": 3 },
+    { "id": "seat_c1_3", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 3, "label": "C-3", "tier": "COUPLE", "status": "SOLD", "x": 3, "y": 3 },
+    { "id": "seat_c1_4", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 4, "label": "C-4", "tier": "COUPLE", "status": "SOLD", "x": 4, "y": 3 },
+    { "id": "seat_c1_5", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 5, "label": "C-5", "tier": "COUPLE", "status": "AVAILABLE", "x": 5, "y": 3 },
+    { "id": "seat_c1_6", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 6, "label": "C-6", "tier": "COUPLE", "status": "AVAILABLE", "x": 6, "y": 3 },
+    { "id": "seat_c1_7", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 7, "label": "C-7", "tier": "COUPLE", "status": "AVAILABLE", "x": 7, "y": 3 },
+    { "id": "seat_c1_8", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "C", "number": 8, "label": "C-8", "tier": "COUPLE", "status": "AVAILABLE", "x": 8, "y": 3 },
+
+    { "id": "seat_d1_1", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 1, "label": "D-1", "tier": "COUPLE", "status": "AVAILABLE", "x": 1, "y": 4 },
+    { "id": "seat_d1_2", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 2, "label": "D-2", "tier": "COUPLE", "status": "AVAILABLE", "x": 2, "y": 4 },
+    { "id": "seat_d1_3", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 3, "label": "D-3", "tier": "COUPLE", "status": "AVAILABLE", "x": 3, "y": 4 },
+    { "id": "seat_d1_4", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 4, "label": "D-4", "tier": "COUPLE", "status": "HELD", "x": 4, "y": 4 },
+    { "id": "seat_d1_5", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 5, "label": "D-5", "tier": "COUPLE", "status": "AVAILABLE", "x": 5, "y": 4 },
+    { "id": "seat_d1_6", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 6, "label": "D-6", "tier": "COUPLE", "status": "AVAILABLE", "x": 6, "y": 4 },
+    { "id": "seat_d1_7", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 7, "label": "D-7", "tier": "COUPLE", "status": "SOLD", "x": 7, "y": 4 },
+    { "id": "seat_d1_8", "eventId": "evt_anoushka_strings", "sectionId": "sec_couple", "row": "D", "number": 8, "label": "D-8", "tier": "COUPLE", "status": "SOLD", "x": 8, "y": 4 },
+
+    { "id": "seat_e1_1", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 1, "label": "E-1", "tier": "GENERAL", "status": "AVAILABLE", "x": 1, "y": 5 },
+    { "id": "seat_e1_2", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 2, "label": "E-2", "tier": "GENERAL", "status": "AVAILABLE", "x": 2, "y": 5 },
+    { "id": "seat_e1_3", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 3, "label": "E-3", "tier": "GENERAL", "status": "AVAILABLE", "x": 3, "y": 5 },
+    { "id": "seat_e1_4", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 4, "label": "E-4", "tier": "GENERAL", "status": "AVAILABLE", "x": 4, "y": 5 },
+    { "id": "seat_e1_5", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 5, "label": "E-5", "tier": "GENERAL", "status": "AVAILABLE", "x": 5, "y": 5 },
+    { "id": "seat_e1_6", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 6, "label": "E-6", "tier": "GENERAL", "status": "SOLD", "x": 6, "y": 5 },
+    { "id": "seat_e1_7", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 7, "label": "E-7", "tier": "GENERAL", "status": "SOLD", "x": 7, "y": 5 },
+    { "id": "seat_e1_8", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "E", "number": 8, "label": "E-8", "tier": "GENERAL", "status": "AVAILABLE", "x": 8, "y": 5 },
+
+    { "id": "seat_f1_1", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 1, "label": "F-1", "tier": "GENERAL", "status": "AVAILABLE", "x": 1, "y": 6 },
+    { "id": "seat_f1_2", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 2, "label": "F-2", "tier": "GENERAL", "status": "AVAILABLE", "x": 2, "y": 6 },
+    { "id": "seat_f1_3", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 3, "label": "F-3", "tier": "GENERAL", "status": "AVAILABLE", "x": 3, "y": 6 },
+    { "id": "seat_f1_4", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 4, "label": "F-4", "tier": "GENERAL", "status": "AVAILABLE", "x": 4, "y": 6 },
+    { "id": "seat_f1_5", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 5, "label": "F-5", "tier": "GENERAL", "status": "AVAILABLE", "x": 5, "y": 6 },
+    { "id": "seat_f1_6", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 6, "label": "F-6", "tier": "GENERAL", "status": "AVAILABLE", "x": 6, "y": 6 },
+    { "id": "seat_f1_7", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 7, "label": "F-7", "tier": "GENERAL", "status": "SOLD", "x": 7, "y": 6 },
+    { "id": "seat_f1_8", "eventId": "evt_anoushka_strings", "sectionId": "sec_general", "row": "F", "number": 8, "label": "F-8", "tier": "GENERAL", "status": "SOLD", "x": 8, "y": 6 },
+
+    { "id": "club_v1", "eventId": "evt_subzero_dj", "sectionId": "sec_club_vip", "row": "VB1", "number": 1, "label": "VIP Booth 1A", "tier": "VIP", "status": "AVAILABLE", "x": 1, "y": 1 },
+    { "id": "club_v2", "eventId": "evt_subzero_dj", "sectionId": "sec_club_vip", "row": "VB1", "number": 2, "label": "VIP Booth 1B", "tier": "VIP", "status": "AVAILABLE", "x": 2, "y": 1 },
+    { "id": "club_v3", "eventId": "evt_subzero_dj", "sectionId": "sec_club_vip", "row": "VB2", "number": 1, "label": "VIP Booth 2A", "tier": "VIP", "status": "SOLD", "x": 1, "y": 2 },
+    { "id": "club_v4", "eventId": "evt_subzero_dj", "sectionId": "sec_club_vip", "row": "VB2", "number": 2, "label": "VIP Booth 2B", "tier": "VIP", "status": "AVAILABLE", "x": 2, "y": 2, "conflictDemo": true },
+    { "id": "club_v5", "eventId": "evt_subzero_dj", "sectionId": "sec_club_vip", "row": "VB3", "number": 1, "label": "VIP Booth 3A", "tier": "VIP", "status": "AVAILABLE", "x": 7, "y": 1 },
+    { "id": "club_v6", "eventId": "evt_subzero_dj", "sectionId": "sec_club_vip", "row": "VB3", "number": 2, "label": "VIP Booth 3B", "tier": "VIP", "status": "HELD", "x": 8, "y": 1 },
+    { "id": "club_c1", "eventId": "evt_subzero_dj", "sectionId": "sec_club_couple", "row": "CP1", "number": 1, "label": "Couple Table 1", "tier": "COUPLE", "status": "AVAILABLE", "x": 3, "y": 2 },
+    { "id": "club_c2", "eventId": "evt_subzero_dj", "sectionId": "sec_club_couple", "row": "CP1", "number": 2, "label": "Couple Table 2", "tier": "COUPLE", "status": "AVAILABLE", "x": 4, "y": 2 },
+    { "id": "club_c3", "eventId": "evt_subzero_dj", "sectionId": "sec_club_couple", "row": "CP2", "number": 1, "label": "Couple Table 3", "tier": "COUPLE", "status": "SOLD", "x": 5, "y": 2 },
+    { "id": "club_c4", "eventId": "evt_subzero_dj", "sectionId": "sec_club_couple", "row": "CP2", "number": 2, "label": "Couple Table 4", "tier": "COUPLE", "status": "AVAILABLE", "x": 6, "y": 2 },
+    { "id": "club_g1", "eventId": "evt_subzero_dj", "sectionId": "sec_club_general", "row": "DF", "number": 1, "label": "Floor Pass 01", "tier": "GENERAL", "status": "AVAILABLE", "x": 3, "y": 4 },
+    { "id": "club_g2", "eventId": "evt_subzero_dj", "sectionId": "sec_club_general", "row": "DF", "number": 2, "label": "Floor Pass 02", "tier": "GENERAL", "status": "AVAILABLE", "x": 4, "y": 4 },
+    { "id": "club_g3", "eventId": "evt_subzero_dj", "sectionId": "sec_club_general", "row": "DF", "number": 3, "label": "Floor Pass 03", "tier": "GENERAL", "status": "AVAILABLE", "x": 5, "y": 4 },
+    { "id": "club_g4", "eventId": "evt_subzero_dj", "sectionId": "sec_club_general", "row": "DF", "number": 4, "label": "Floor Pass 04", "tier": "GENERAL", "status": "SOLD", "x": 6, "y": 4 },
+
+    { "id": "com_a1", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_vip", "row": "A", "number": 1, "label": "A-1", "tier": "VIP", "status": "AVAILABLE", "x": 1, "y": 1 },
+    { "id": "com_a2", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_vip", "row": "A", "number": 2, "label": "A-2", "tier": "VIP", "status": "AVAILABLE", "x": 2, "y": 1 },
+    { "id": "com_a3", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_vip", "row": "A", "number": 3, "label": "A-3", "tier": "VIP", "status": "SOLD", "x": 3, "y": 1 },
+    { "id": "com_a4", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_vip", "row": "A", "number": 4, "label": "A-4", "tier": "VIP", "status": "AVAILABLE", "x": 4, "y": 1 },
+    { "id": "com_b1", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_couple", "row": "B", "number": 1, "label": "B-1", "tier": "COUPLE", "status": "AVAILABLE", "x": 1, "y": 2 },
+    { "id": "com_b2", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_couple", "row": "B", "number": 2, "label": "B-2", "tier": "COUPLE", "status": "AVAILABLE", "x": 2, "y": 2 },
+    { "id": "com_b3", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_couple", "row": "B", "number": 3, "label": "B-3", "tier": "COUPLE", "status": "AVAILABLE", "x": 3, "y": 2 },
+    { "id": "com_b4", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_couple", "row": "B", "number": 4, "label": "B-4", "tier": "COUPLE", "status": "AVAILABLE", "x": 4, "y": 2 },
+    { "id": "com_c1", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_general", "row": "C", "number": 1, "label": "C-1", "tier": "GENERAL", "status": "AVAILABLE", "x": 1, "y": 3 },
+    { "id": "com_c2", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_general", "row": "C", "number": 2, "label": "C-2", "tier": "GENERAL", "status": "AVAILABLE", "x": 2, "y": 3 },
+    { "id": "com_c3", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_general", "row": "C", "number": 3, "label": "C-3", "tier": "GENERAL", "status": "AVAILABLE", "x": 3, "y": 3 },
+    { "id": "com_c4", "eventId": "evt_virdas_comedy", "sectionId": "sec_comedy_general", "row": "C", "number": 4, "label": "C-4", "tier": "GENERAL", "status": "AVAILABLE", "x": 4, "y": 3 },
+
+    { "id": "qaw_a1", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_vip", "row": "A", "number": 1, "label": "A-1", "tier": "VIP", "status": "AVAILABLE", "x": 1, "y": 1 },
+    { "id": "qaw_a2", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_vip", "row": "A", "number": 2, "label": "A-2", "tier": "VIP", "status": "AVAILABLE", "x": 2, "y": 1 },
+    { "id": "qaw_a3", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_vip", "row": "A", "number": 3, "label": "A-3", "tier": "VIP", "status": "AVAILABLE", "x": 3, "y": 1 },
+    { "id": "qaw_a4", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_vip", "row": "A", "number": 4, "label": "A-4", "tier": "VIP", "status": "SOLD", "x": 4, "y": 1 },
+    { "id": "qaw_b1", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_couple", "row": "B", "number": 1, "label": "B-1", "tier": "COUPLE", "status": "AVAILABLE", "x": 1, "y": 2 },
+    { "id": "qaw_b2", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_couple", "row": "B", "number": 2, "label": "B-2", "tier": "COUPLE", "status": "AVAILABLE", "x": 2, "y": 2 },
+    { "id": "qaw_c1", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_general", "row": "C", "number": 1, "label": "C-1", "tier": "GENERAL", "status": "AVAILABLE", "x": 1, "y": 3 },
+    { "id": "qaw_c2", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_general", "row": "C", "number": 2, "label": "C-2", "tier": "GENERAL", "status": "AVAILABLE", "x": 2, "y": 3 },
+    { "id": "qaw_c3", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_general", "row": "C", "number": 3, "label": "C-3", "tier": "GENERAL", "status": "AVAILABLE", "x": 3, "y": 3 },
+    { "id": "qaw_c4", "eventId": "evt_qawwali_courtyard", "sectionId": "sec_qaw_general", "row": "C", "number": 4, "label": "C-4", "tier": "GENERAL", "status": "AVAILABLE", "x": 4, "y": 3 }
+  ],
+  "tickets": [
+    {
+      "id": "tkt_89421",
+      "code": "VNU-89421-MNT",
+      "barCode": "BAR-8942",
+      "orderId": "ord_9012",
+      "eventId": "evt_anoushka_strings",
+      "eventTitle": "Anoushka Shankar & Guildhall Strings",
+      "category": "Live Music",
+      "venueName": "Royal Opera House",
+      "dateLabel": "Fri, 28 Nov 2026 · 19:30 IST",
+      "eventStartsAt": "2026-11-28T19:30:00+05:30",
+      "expiresAt": "2026-11-29T06:00:00+05:30",
+      "gate": "Gate A · Main Entrance",
+      "tier": "VIP",
+      "sectionName": "VIP / Stage",
+      "seatLabels": ["B-4", "B-5"],
+      "foodBalance": 1200,
+      "initialFoodBalance": 1200,
+      "qrToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aWNrZXRfaWQiOiJ0a3RfODk0MjEiLCJldmVudF9pZCI6ImV2dF9hbm91c2hrYV9zdHJpbmdzIiwiY29kZSI6IlZOVS04OTQyMS1NTlQifQ.sig_venu_verified",
+      "checkedIn": false,
+      "checkedInAt": null,
+      "totalPaid": 4224,
+      "attendees": [
+        { "seatId": "seat_b1_4", "seatLabel": "B-4", "fullName": "Arjun Mehta", "age": 27, "gender": "MALE", "admitted": false },
+        { "seatId": "seat_b1_5", "seatLabel": "B-5", "fullName": "Pooja Mehta", "age": 25, "gender": "FEMALE", "admitted": false }
+      ],
+      "contactEmail": "arjun.mehta@gmail.com",
+      "contactPhone": "+91 98204 11220"
+    },
+    {
+      "id": "tkt_77210",
+      "code": "VNU-77210-VIP",
+      "barCode": "BAR-7721",
+      "orderId": "ord_8841",
+      "eventId": "evt_subzero_dj",
+      "eventTitle": "Sub-Zero Sessions ft. DJ Arjun & Lost Frequencies",
+      "category": "Lounge Sessions",
+      "venueName": "Bandra Warehouse Studio",
+      "dateLabel": "Sat, 29 Nov 2026 · 21:30 IST",
+      "eventStartsAt": "2026-11-29T21:30:00+05:30",
+      "expiresAt": "2026-11-30T06:00:00+05:30",
+      "gate": "North Door · VIP Express",
+      "tier": "VIP",
+      "sectionName": "VIP Booth",
+      "seatLabels": ["VIP Booth 2A"],
+      "foodBalance": 800,
+      "initialFoodBalance": 800,
+      "qrToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aWNrZXRfaWQiOiJ0a3RfNzcyMTAiLCJldmVudF9pZCI6ImV2dF9zdWJ6ZXJvX2RqIiwiY29kZSI6IlZOVS03NzIxMC1WSVAifQ.sig_venu_verified",
+      "checkedIn": true,
+      "checkedInAt": "2026-11-19T01:40:00Z",
+      "totalPaid": 2832,
+      "attendees": [
+        { "seatId": "club_v3", "seatLabel": "VIP Booth 2A", "fullName": "Vikram Singhania", "age": 31, "gender": "MALE", "admitted": true }
+      ],
+      "contactEmail": "vikram.s@outlook.com",
+      "contactPhone": "+91 98201 55410"
+    },
+    {
+      "id": "tkt_64019",
+      "code": "VNU-64019-GEN",
+      "barCode": "BAR-6401",
+      "orderId": "ord_8710",
+      "eventId": "evt_virdas_comedy",
+      "eventTitle": "Vir Das: The Mindful Mistake (Unplugged)",
+      "category": "Stand-up Comedy",
+      "venueName": "The Habitat Studio",
+      "dateLabel": "Sun, 30 Nov 2026 · 20:00 IST",
+      "eventStartsAt": "2026-11-30T20:00:00+05:30",
+      "expiresAt": "2026-12-01T06:00:00+05:30",
+      "gate": "Main Lobby",
+      "tier": "GENERAL",
+      "sectionName": "General",
+      "seatLabels": ["A-3"],
+      "foodBalance": 280,
+      "initialFoodBalance": 400,
+      "qrToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aWNrZXRfaWQiOiJ0a3RfNjQwMTkiLCJldmVudF9pZCI6ImV2dF92aXJkYXNfY29tZWR5IiwiY29kZSI6IlZOVS02NDAxOS1HRU4ifQ.sig_venu_verified",
+      "checkedIn": false,
+      "checkedInAt": null,
+      "totalPaid": 2124,
+      "attendees": [
+        { "seatId": "com_a3", "seatLabel": "A-3", "fullName": "Ganesh Hegde", "age": 28, "gender": "MALE", "admitted": false }
+      ],
+      "contactEmail": "ganesh.h@gmail.com",
+      "contactPhone": "+91 98192 44012"
+    },
+    {
+      "id": "tkt_51092",
+      "code": "VNU-51092-CPL",
+      "barCode": "BAR-5109",
+      "orderId": "ord_8102",
+      "eventId": "evt_qawwali_courtyard",
+      "eventTitle": "Nizami Qawwali: In the Mood for Love",
+      "category": "Live Music",
+      "venueName": "Sophia Auditorium Courtyard",
+      "dateLabel": "Sun, 10 Nov 2025 · 19:00 IST",
+      "eventStartsAt": "2025-11-10T19:00:00+05:30",
+      "expiresAt": "2025-11-11T06:00:00+05:30",
+      "gate": "Gate C · Courtyard",
+      "tier": "COUPLE",
+      "sectionName": "Couple Lounge",
+      "seatLabels": ["B-1", "B-2"],
+      "foodBalance": 500,
+      "initialFoodBalance": 800,
+      "qrToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0aWNrZXRfaWQiOiJ0a3RfNTEwOTIiLCJldmVudF9pZCI6ImV2dF9xYXd3YWxpX2NvdXJ0eWFyZCIsImNvZGUiOiJWTlUtNTEwOTItQ1BMIn0.sig_venu_verified",
+      "checkedIn": false,
+      "checkedInAt": null,
+      "totalPaid": 3400,
+      "attendees": [
+        { "seatId": "qaw_b1", "seatLabel": "B-1", "fullName": "Rohan Kapoor", "age": 29, "gender": "MALE", "admitted": false },
+        { "seatId": "qaw_b2", "seatLabel": "B-2", "fullName": "Sneha Iyer", "age": 27, "gender": "FEMALE", "admitted": false }
+      ],
+      "contactEmail": "rohan.k@gmail.com",
+      "contactPhone": "+91 98208 11900"
+    }
+  ],
+  "fnbMenu": [
+    { "id": "fnb_craft_lager", "name": "Craft Lager (330ml)", "category": "Bar", "price": 450, "isAlcoholic": true },
+    { "id": "fnb_gin_tonic", "name": "Artisanal Gin & Tonic", "category": "Bar", "price": 650, "isAlcoholic": true },
+    { "id": "fnb_mocktail", "name": "Signature Botanical Spritz", "category": "Zero-Proof", "price": 320, "isAlcoholic": false },
+    { "id": "fnb_sparkling", "name": "Sparkling Mineral Water", "category": "Zero-Proof", "price": 180, "isAlcoholic": false },
+    { "id": "fnb_truffle_fries", "name": "Truffle Parmesan Fries", "category": "Kitchen", "price": 350, "isAlcoholic": false },
+    { "id": "fnb_sliders", "name": "Smoked Brioche Sliders", "category": "Kitchen", "price": 480, "isAlcoholic": false }
+  ],
+  "fnbTransactions": [
+    {
+      "id": "fnbt_01",
+      "ticketId": "tkt_64019",
+      "ticketCode": "VNU-64019-GEN",
+      "patronName": "Ganesh Hegde",
+      "itemsSummary": "1x Sparkling Mineral Water",
+      "totalAmount": 180,
+      "walletDeducted": 180,
+      "upiDeltaPaid": 0,
+      "bartenderName": "Karan S.",
+      "createdAt": "2026-11-19T01:22:00Z"
+    }
+  ],
+  "recentScans": [
+    {
+      "id": "scan_01",
+      "ticketCode": "VNU-77210-VIP",
+      "patronName": "Vikram Singhania",
+      "tier": "VIP",
+      "seatLabel": "VIP Booth 2A",
+      "status": "VALID_ADMITTED",
+      "scannedAt": "01:40 AM"
+    },
+    {
+      "id": "scan_02",
+      "ticketCode": "VNU-51092-GEN",
+      "patronName": "Rohan & Sneha",
+      "tier": "COUPLE",
+      "seatLabel": "C-3, C-4",
+      "status": "VALID_ADMITTED",
+      "scannedAt": "01:18 AM"
+    }
+  ]
+}
