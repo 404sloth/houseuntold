@@ -1,156 +1,157 @@
--- Venu Ticketing Platform — BCNF Normalized PostgreSQL Schema (Migration 001)
+-- Venu Ticketing Platform — Production Schema (GA Ticketing, Manual UPI Verification, Dual Barcodes)
 
-CREATE TYPE user_role AS ENUM ('USER', 'ADMIN', 'SCANNER', 'BARTENDER');
-CREATE TYPE auth_provider AS ENUM ('GOOGLE', 'LOCAL_ADMIN', 'FIREBASE_PHONE');
-CREATE TYPE seat_status AS ENUM ('AVAILABLE', 'HELD', 'SOLD');
-CREATE TYPE order_status AS ENUM ('PENDING', 'CONFIRMED', 'FAILED', 'EXPIRED');
-CREATE TYPE tier_type AS ENUM ('VIP', 'COUPLE', 'GENERAL');
+-- ==========================================
+-- 1. ENUMS (Strict Type Safety)
+-- ==========================================
+CREATE TYPE staff_role AS ENUM ('ADMIN', 'SCANNER', 'BARTENDER');
+CREATE TYPE event_status AS ENUM ('DRAFT', 'ON_SALE', 'SOLD_OUT', 'ENDED');
+CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'FAILED');
+CREATE TYPE gender_type AS ENUM ('MALE', 'FEMALE', 'OTHER');
+CREATE TYPE menu_category AS ENUM ('DRINK', 'FOOD');
 
-CREATE TABLE users (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name            TEXT NOT NULL,
-    email           TEXT NOT NULL UNIQUE,
-    auth_provider   auth_provider NOT NULL DEFAULT 'GOOGLE',
-    google_sub      TEXT UNIQUE,
-    firebase_uid    TEXT UNIQUE,
-    password_hash   TEXT,
-    totp_secret     TEXT,
-    phone           TEXT NOT NULL DEFAULT '',
-    phone_verified  BOOLEAN NOT NULL DEFAULT FALSE,
-    role            user_role NOT NULL DEFAULT 'USER',
-    age             INT NOT NULL DEFAULT 18 CHECK (age >= 5),
-    is_active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+-- ==========================================
+-- 2. TABLES
+-- ==========================================
+
+CREATE TABLE staff_accounts (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username      VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role          staff_role NOT NULL,
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE refresh_tokens (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    token_hash  TEXT NOT NULL UNIQUE,
-    family_id   UUID NOT NULL,
-    revoked     BOOLEAN NOT NULL DEFAULT FALSE,
-    expires_at  TIMESTAMPTZ NOT NULL,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE rate_limits (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    identifier    VARCHAR(255) NOT NULL,
+    endpoint      VARCHAR(255) NOT NULL,
+    hits          INT NOT NULL DEFAULT 1,
+    window_start  TIMESTAMPTZ NOT NULL
 );
-
-CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens (user_id);
-CREATE INDEX idx_refresh_tokens_family_id ON refresh_tokens (family_id);
 
 CREATE TABLE events (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    slug            TEXT NOT NULL UNIQUE,
-    title           TEXT NOT NULL,
-    subtitle        TEXT NOT NULL,
-    category        TEXT NOT NULL,
-    venue_name      TEXT NOT NULL,
-    venue_city      TEXT NOT NULL,
-    venue_address   TEXT NOT NULL,
-    transit_note    TEXT NOT NULL DEFAULT '',
-    layout_type     TEXT NOT NULL CHECK (layout_type IN ('PROSCENIUM', 'CLUB')),
-    layout_json     JSONB NOT NULL DEFAULT '{}'::jsonb,
-    image_url       TEXT NOT NULL DEFAULT '',
-    date_label      TEXT NOT NULL,
-    time_label      TEXT NOT NULL,
-    doors_open      TEXT NOT NULL DEFAULT '',
-    starts_at       TIMESTAMPTZ NOT NULL,
-    status          TEXT NOT NULL DEFAULT 'ON_SALE' CHECK (status IN ('ON_SALE', 'ALMOST_FULL', 'DRAFT', 'PAUSED')),
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title         VARCHAR(255) NOT NULL,
+    starts_at     TIMESTAMPTZ NOT NULL,
+    ends_at       TIMESTAMPTZ NOT NULL,
+    location      VARCHAR(255) NOT NULL,
+    status        event_status NOT NULL DEFAULT 'DRAFT',
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT chk_events_time_window CHECK (ends_at > starts_at)
 );
 
-CREATE TABLE event_sections (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_id        UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    name            TEXT NOT NULL,
-    tier            tier_type NOT NULL,
-    section_price   INT NOT NULL CHECK (section_price >= 0),
-    fnb_credit      INT NOT NULL DEFAULT 0 CHECK (fnb_credit >= 0),
-    is_alcoholic    BOOLEAN NOT NULL DEFAULT FALSE,
-    min_age         INT NOT NULL DEFAULT 0 CHECK (min_age >= 0),
-    description     TEXT NOT NULL DEFAULT ''
+CREATE TABLE ticket_categories (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id           UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    name               VARCHAR(100) NOT NULL, -- STAG_MALE, STAG_FEMALE, COUPLE, TABLE
+    category           VARCHAR(50),           -- A, B, C (for tables)
+    base_price         INT NOT NULL CHECK (base_price >= 0),
+    fnb_credit         INT NOT NULL CHECK (fnb_credit >= 0),
+    entry_count        INT NOT NULL CHECK (entry_count IN (1, 2, 10, 15)),
+    is_gender_strict   BOOLEAN NOT NULL DEFAULT false
 );
 
-CREATE TABLE seat_inventory (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    event_id        UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-    section_id      UUID NOT NULL REFERENCES event_sections(id) ON DELETE CASCADE,
-    row_label       TEXT NOT NULL,
-    seat_number     INT NOT NULL,
-    label           TEXT NOT NULL,
-    pos_x           INT NOT NULL,
-    pos_y           INT NOT NULL,
-    status          seat_status NOT NULL DEFAULT 'AVAILABLE',
-    held_by_user_id UUID REFERENCES users(id),
-    hold_expires_at TIMESTAMPTZ,
-    UNIQUE (event_id, row_label, seat_number)
-);
-
-CREATE INDEX idx_seat_inventory_event_status ON seat_inventory (event_id, status);
-
-CREATE TABLE orders (
-    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id             UUID NOT NULL REFERENCES users(id),
-    event_id            UUID NOT NULL REFERENCES events(id),
-    razorpay_order_id   TEXT NOT NULL UNIQUE,
-    base_amount         INT NOT NULL,
-    convenience_fee     INT NOT NULL,
-    gst_amount          INT NOT NULL,
-    total_payable       INT NOT NULL,
-    contact_email       TEXT NOT NULL,
-    contact_phone       TEXT NOT NULL,
-    status              order_status NOT NULL DEFAULT 'PENDING',
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    confirmed_at        TIMESTAMPTZ
-);
-
-CREATE TABLE order_seats (
-    order_id        UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    seat_id         UUID NOT NULL REFERENCES seat_inventory(id),
-    attendee_name   TEXT NOT NULL,
-    attendee_age    INT NOT NULL,
-    admitted        BOOLEAN NOT NULL DEFAULT FALSE,
-    PRIMARY KEY (order_id, seat_id)
+CREATE TABLE bookings (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id           UUID NOT NULL REFERENCES events(id),
+    category_id        UUID NOT NULL REFERENCES ticket_categories(id),
+    contact_phone      VARCHAR(50) NOT NULL,
+    contact_email      VARCHAR(255) NOT NULL,
+    total_amount       INT NOT NULL CHECK (total_amount >= 0),
+    upi_transaction_id VARCHAR(100),          -- User-submitted UPI UTR / transaction reference
+    status             booking_status NOT NULL DEFAULT 'PENDING',
+    verified_by        UUID REFERENCES staff_accounts(id),
+    verified_at        TIMESTAMPTZ,
+    rejection_reason   VARCHAR(255),
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE tickets (
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id            UUID NOT NULL UNIQUE REFERENCES bookings(id) ON DELETE CASCADE,
+    event_id              UUID NOT NULL REFERENCES events(id),
+    qr_token_digest       VARCHAR(255) UNIQUE NOT NULL, -- Gate QR: HMAC-SHA256 digest (single-use, expires on scan)
+    bar_code              VARCHAR(5) UNIQUE NOT NULL,   -- Bartender 1D linear barcode: 1 uppercase letter + 4 digits (e.g. A1234)
+    food_balance          INT NOT NULL CHECK (food_balance >= 0),
+    initial_food_balance  INT NOT NULL CHECK (initial_food_balance >= 0),
+    is_checked_in         BOOLEAN NOT NULL DEFAULT false,
+    checked_in_at         TIMESTAMPTZ,
+    CONSTRAINT chk_tickets_bar_code_format CHECK (bar_code ~ '^[A-Z][0-9]{4}$')
+);
+
+CREATE TABLE ticket_guests (
     id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id             UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    event_id             UUID NOT NULL REFERENCES events(id),
-    user_id              UUID NOT NULL REFERENCES users(id),
-    code                 TEXT NOT NULL UNIQUE,
-    qr_token             TEXT NOT NULL UNIQUE,
-    gate_label           TEXT NOT NULL,
-    food_balance         INT NOT NULL DEFAULT 0 CHECK (food_balance >= 0),
-    initial_food_balance INT NOT NULL DEFAULT 0 CHECK (initial_food_balance >= 0),
-    checked_in           BOOLEAN NOT NULL DEFAULT FALSE,
-    checked_in_at        TIMESTAMPTZ
+    ticket_id            UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    name                 VARCHAR(255) NOT NULL,
+    age                  INT NOT NULL CHECK (age >= 18 AND age <= 120),
+    gender               gender_type NOT NULL,
+    is_primary_contact   BOOLEAN NOT NULL DEFAULT false,
+    free_shot_redeemed   BOOLEAN NOT NULL DEFAULT false
 );
 
-CREATE TABLE gate_scan_logs (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ticket_id       UUID REFERENCES tickets(id),
-    scanner_user_id UUID NOT NULL REFERENCES users(id),
-    ticket_code     TEXT NOT NULL,
-    status          TEXT NOT NULL CHECK (status IN ('VALID_ADMITTED', 'ALREADY_USED', 'INVALID')),
-    scanned_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE menu_items (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name          VARCHAR(255) NOT NULL,
+    category      menu_category NOT NULL,
+    unit_price    INT NOT NULL CHECK (unit_price > 0),
+    is_active     BOOLEAN NOT NULL DEFAULT true
 );
 
-CREATE TABLE fnb_menu_items (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name         TEXT NOT NULL,
-    category     TEXT NOT NULL,
-    price        INT NOT NULL CHECK (price > 0),
-    is_alcoholic BOOLEAN NOT NULL DEFAULT FALSE,
-    is_available BOOLEAN NOT NULL DEFAULT TRUE
+CREATE TABLE bar_transactions (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    ticket_id         UUID NOT NULL REFERENCES tickets(id),
+    bartender_id      UUID NOT NULL REFERENCES staff_accounts(id),
+    idempotency_key   VARCHAR(100),
+    total_bill        INT NOT NULL CHECK (total_bill >= 0),
+    wallet_deducted   INT NOT NULL CHECK (wallet_deducted >= 0),
+    upi_delta_paid    INT NOT NULL CHECK (upi_delta_paid >= 0),
+    balance_before    INT NOT NULL CHECK (balance_before >= 0),
+    balance_after     INT NOT NULL CHECK (balance_after >= 0),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE fnb_transactions (
+CREATE TABLE transaction_line_items (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ticket_id           UUID NOT NULL REFERENCES tickets(id),
-    bartender_user_id   UUID NOT NULL REFERENCES users(id),
-    items_summary       TEXT NOT NULL,
-    total_amount        INT NOT NULL CHECK (total_amount > 0),
-    wallet_deducted     INT NOT NULL CHECK (wallet_deducted >= 0),
-    upi_delta_paid      INT NOT NULL DEFAULT 0 CHECK (upi_delta_paid >= 0),
-    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    transaction_id      UUID NOT NULL REFERENCES bar_transactions(id) ON DELETE CASCADE,
+    menu_item_id        UUID NOT NULL REFERENCES menu_items(id),
+    quantity            INT NOT NULL CHECK (quantity > 0),
+    unit_price_at_sale  INT NOT NULL CHECK (unit_price_at_sale > 0)
 );
+
+-- ==========================================
+-- 3. INDEXES (High-Concurrency Performance)
+-- ==========================================
+-- Rate Limiting
+CREATE UNIQUE INDEX idx_rate_limits_lookup ON rate_limits (identifier, endpoint, window_start);
+CREATE INDEX idx_rate_limits_window_start ON rate_limits (window_start);
+
+-- Bookings & Admin Verification Queue
+CREATE INDEX idx_ticket_categories_event_id ON ticket_categories (event_id);
+CREATE INDEX idx_bookings_event_status ON bookings (event_id, status);
+CREATE INDEX idx_bookings_status_created ON bookings (status, created_at DESC);
+CREATE UNIQUE INDEX idx_bookings_upi_txn_id ON bookings (upi_transaction_id) WHERE upi_transaction_id IS NOT NULL;
+
+-- Tickets, Gate & Bartender POS (Hot Paths)
+CREATE INDEX idx_tickets_booking_id ON tickets (booking_id);
+CREATE INDEX idx_tickets_event_id ON tickets (event_id);
+CREATE INDEX idx_ticket_guests_ticket_id ON ticket_guests (ticket_id);
+CREATE INDEX idx_tickets_bar_code ON tickets (bar_code);
+CREATE INDEX idx_tickets_qr_digest ON tickets (qr_token_digest);
+
+-- Bar Transactions & Audit Traceability
+CREATE INDEX idx_bar_transactions_ticket_created ON bar_transactions (ticket_id, created_at DESC);
+CREATE UNIQUE INDEX idx_bar_transactions_idempotency ON bar_transactions (idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE INDEX idx_transaction_line_items_tx_id ON transaction_line_items (transaction_id);
+
+-- Active Menu Listing
+CREATE INDEX idx_menu_items_active_cat ON menu_items (is_active, category, name);
+
+-- ==========================================
+-- 4. COMMENTS (Documentation for SQLC)
+-- ==========================================
+COMMENT ON COLUMN events.ends_at IS 'Used to automatically expire F&B wallets after event end';
+COMMENT ON COLUMN bookings.upi_transaction_id IS 'Unique UPI UTR/transaction reference submitted by patron for manual admin verification';
+COMMENT ON COLUMN tickets.qr_token_digest IS 'Gate QR HMAC-SHA256 digest — single-use, expires immediately on gate check-in';
+COMMENT ON COLUMN tickets.bar_code IS 'Bartender 1D linear barcode — 1 uppercase letter + 4 digits (e.g. A1234), multi-use until event end';
+COMMENT ON COLUMN bar_transactions.upi_delta_paid IS 'Excess amount collected at bar counter by bartender; stored for audit reference';

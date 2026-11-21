@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"strings"
 )
 
 const MaxJSONBodyBytes = 1 << 20 // 1 MiB
@@ -28,18 +27,6 @@ func ReadJSON(w http.ResponseWriter, r *http.Request, dst any) error {
 	}
 	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		return NewBadRequest("request body must contain a single JSON object", nil)
-	}
-	return nil
-}
-
-func DecodeStrictBytes(raw []byte, dst any) error {
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		return err
-	}
-	if err := dec.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return errors.New("unexpected trailing JSON content")
 	}
 	return nil
 }

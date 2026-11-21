@@ -1,0 +1,2102 @@
+openapi: 3.1.0
+info:
+  title: Venu Nightclub & Events Ticketing API
+  version: 2.0.0
+  description: |
+    Production-grade Go API for the **Venu** general-admission ticketing, direct UPI QR verification,
+    WhatsApp Cloud ticket delivery (PNG pass + message), single-use gate scanning, and high-throughput
+    bartender F&B counter POS platform.
+
+    ### Architecture & Security Highlights
+    - **Direct UPI QR + Admin Verification**: No Razorpay or PhonePe dependencies. Patrons scan the venue UPI QR,
+      pay the exact server-calculated amount, and submit their UPI Transaction ID (UTR). Admins review both UTR and
+      expected amount and approve/reject; approval dispatches the rendered PNG ticket pass + confirmation message
+      over the Meta WhatsApp Cloud API.
+    - **Dual Barcodes per Ticket**:
+      1. **Gate QR Token** (`gate_qr_token`): HMAC-SHA256 signed single-use token. **Expires immediately** upon
+         gate check-in (`POST /api/gate/check-in`) and is omitted from subsequent `GET /api/tickets/{uuid}` responses.
+      2. **Bartender 1D Linear Barcode** (`bar_code`): Unique 5-character ISO/IEC 16388 Code-39 barcode
+         (`^[A-Z][0-9]{4}$`, e.g., `K4829`). **Multi-use** throughout the event until `events.ends_at`, when it
+         and any unused F&B wallet balance expire automatically.
+    - **Per-Request Role Validation & Isolated Cache**: Every protected route verifies the signed JWT and checks
+      the server-side `StaffRoleCache` (backed by PostgreSQL and instantly invalidated on logout, password change,
+      or staff deactivation). Browser sessions use strictly isolated `HttpOnly; SameSite=Strict` cookies with
+      `X-Frame-Options: DENY`, `Cross-Origin-Resource-Policy: same-origin`, `Cache-Control: no-store`, and CSRF
+      `Origin` / `Sec-Fetch-Site` enforcement.
+    - **High-Concurrency Counter Redemption (`POST /api/counter/redeem`)**: Zero-trust server menu pricing,
+      B-tree indexed row-level locking (`FOR UPDATE OF t`), `Idempotency-Key` duplicate-charge replay protection,
+      and full line-item + before/after balance traceability. Any bill excess above the ticket's remaining F&B
+      balance is recorded as `delta_to_collect` for bartender counter reference.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Health
+    description: Service and PostgreSQL liveness checks
+  - name: Public & Checkout
+    description: Public event listings, First-99 dynamic female pricing, direct UPI QR checkout, and UTR submission
+  - name: Tickets
+    description: Public dual-barcode digital pass lookup and rendered PNG ticket pass with 1D Code-39 linear barcode
+  - name: Staff Auth
+    description: Staff (ADMIN, SCANNER, BARTENDER) authentication, token refresh, and cache-evicting logout
+  - name: Gate Scanner
+    description: Single-use HMAC-SHA256 gate QR validation and atomic check-in (SCANNER or ADMIN)
+  - name: Bartender POS
+    description: Menu management (list/add/delete), 1D barcode search, transaction history, and atomic F&B redemption (BARTENDER or ADMIN)
+  - name: Admin
+    description: Staff lifecycle, manual UPI payment verification queue, events, GA tiers, and live event analytics (ADMIN only)
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Verifies API responsiveness and PostgreSQL connectivity within a 3-second context timeout.
+      operationId: getHealth
+      responses:
+        "200":
+          description: Service and database are healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "503":
+          description: Database unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorPayload"
+              example:
+                error: database unavailable
+
+  /api/events/{id}:
+    get:
+      tags: [Public & Checkout]
+      summary: Get public event details & dynamic pricing
+      description: |
+        Returns event metadata, venue UPI VPA/QR configuration, and all GA ticket tiers with live server-calculated
+        `effective_price` (applying the First-99 Free Female Stag rule when slots remain).
+      operationId: getEventDetails
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Event UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Event details with dynamic tier pricing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventDetailsView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/tickets/{uuid}:
+    get:
+      tags: [Tickets]
+      summary: Get digital ticket pass payload
+      description: |
+        Returns booking status, event details, guest roster, F&B wallet balance, and barcodes.
+        - Barcodes and `ticket_image_url` are only exposed once `booking_status` is `CONFIRMED`.
+        - `gate_qr_token` is **omitted immediately** once `is_checked_in` becomes `true`.
+        - `bar_code` (5-character 1D Code-39 linear barcode) remains visible for multi-use counter redemption until `event_ends_at`.
+      operationId: getTicketByUUID
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          description: Ticket UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Public ticket pass payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicTicketView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/tickets/{uuid}/image:
+    get:
+      tags: [Tickets]
+      summary: Download rendered PNG ticket pass
+      description: |
+        Renders a 960x480 PNG ticket pass featuring event details, primary guest name, entry count, F&B balance,
+        gate check-in stub status, and an ISO/IEC 16388 Code-39 1D linear bartender barcode.
+        Available only for `CONFIRMED` tickets. Also attached automatically to WhatsApp delivery messages.
+      operationId: getTicketImagePNG
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          description: Ticket UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Rendered PNG ticket image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Ticket payment is not yet verified by admin
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorPayload"
+              example:
+                error: ticket pass image is available only after payment verification
+
+  /api/checkout/init:
+    post:
+      tags: [Public & Checkout]
+      summary: Initialize guest checkout (Direct UPI QR or instant First-99 free pass)
+      description: |
+        Creates a guest booking, ticket (with unique 5-char 1D `bar_code` and HMAC gate digest), and guest roster.
+        - **Paid passes**: Returns `status: PENDING` and `upi_payment` instructions (VPA, exact `amount_inr`,
+          `upi://pay?...` intent URI, and optional `qr_image_url`). Patron may optionally include `upi_transaction_id`
+          immediately or submit it afterwards via `POST /api/checkout/{booking_id}/upi-reference`.
+        - **₹0 First-99 Female Stag passes**: Atomically locked on the event row, instantly `CONFIRMED`, returns
+          `bar_code` + `gate_qr_token` + `ticket_image_url`, and enqueues WhatsApp PNG pass + message delivery.
+      operationId: initGuestCheckout
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InitCheckoutRequest"
+            example:
+              event_id: 11111111-1111-1111-1111-111111111111
+              category_id: 22222222-2222-2222-2222-222222222222
+              contact_phone: "+919876543210"
+              contact_email: "aarav@example.com"
+              upi_transaction_id: "431912345678"
+              guests:
+                - name: "Aarav Mehta"
+                  age: 25
+                  gender: MALE
+                  is_primary_contact: true
+                - name: "Riya Sharma"
+                  age: 24
+                  gender: FEMALE
+                  is_primary_contact: false
+      responses:
+        "201":
+          description: Checkout initialized (PENDING awaiting UPI verification, or CONFIRMED if ₹0)
+          headers:
+            X-RateLimit-Limit:
+              $ref: "#/components/headers/X-RateLimit-Limit"
+            X-RateLimit-Remaining:
+              $ref: "#/components/headers/X-RateLimit-Remaining"
+            X-RateLimit-Reset:
+              $ref: "#/components/headers/X-RateLimit-Reset"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InitCheckoutResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/checkout/{booking_id}/upi-reference:
+    post:
+      tags: [Public & Checkout]
+      summary: Submit patron UPI Transaction ID (UTR)
+      description: |
+        Attaches or updates the patron's UPI Transaction ID / UTR (8–40 alphanumeric characters) on a `PENDING`
+        booking so an Admin can verify both the UTR and exact expected amount before approving.
+        Duplicate UTRs already bound to another booking are rejected with `409 Conflict`.
+      operationId: submitUPITransactionID
+      parameters:
+        - name: booking_id
+          in: path
+          required: true
+          description: Pending Booking UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [upi_transaction_id]
+              properties:
+                upi_transaction_id:
+                  type: string
+                  minLength: 8
+                  maxLength: 40
+                  pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{7,39}$"
+                  example: "431987654321"
+      responses:
+        "200":
+          description: UPI transaction reference saved for admin verification
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [booking_id, status, total_amount, upi_transaction_id, message]
+                properties:
+                  booking_id:
+                    type: string
+                    format: uuid
+                  status:
+                    $ref: "#/components/schemas/BookingStatus"
+                  total_amount:
+                    type: integer
+                    format: int32
+                    example: 3000
+                  upi_transaction_id:
+                    type: string
+                    example: "431987654321"
+                  message:
+                    type: string
+                    example: "UPI transaction reference submitted; awaiting admin verification"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/auth/login:
+    post:
+      tags: [Staff Auth]
+      summary: Staff login (ADMIN, SCANNER, BARTENDER)
+      description: |
+        Authenticates staff credentials via Argon2id, populates the server-side `StaffRoleCache`,
+        sets strictly isolated `HttpOnly; SameSite=Strict` access and refresh cookies (`venu_access`, `venu_refresh`),
+        and returns the staff summary + bearer access token for non-browser API clients.
+      operationId: staffLogin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  format: password
+                  example: "StrongPass!2026"
+      responses:
+        "200":
+          description: Staff authenticated
+          headers:
+            Set-Cookie:
+              description: Sets `venu_access` and `venu_refresh` with `HttpOnly; SameSite=Strict` (plus `Secure` in prod)
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffSessionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/auth/refresh:
+    post:
+      tags: [Staff Auth]
+      summary: Refresh staff session tokens
+      description: |
+        Re-validates the staff account against PostgreSQL (rejecting deactivated accounts and evicting them from cache)
+        and rotates access/refresh tokens. Accepts the `venu_refresh` cookie (with same-origin CSRF enforcement)
+        or a JSON body `refresh_token` for API clients.
+      operationId: refreshSession
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Session refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffSessionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/auth/logout:
+    post:
+      tags: [Staff Auth]
+      summary: Logout staff & evict role cache
+      description: Immediately evicts the staff member from `StaffRoleCache` and clears both `HttpOnly` session cookies.
+      operationId: logoutStaff
+      responses:
+        "200":
+          description: Signed out
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: signed_out
+
+  /api/gate/validate:
+    post:
+      tags: [Gate Scanner]
+      summary: Validate gate QR token (read-only preview)
+      description: |
+        Verifies the HMAC-SHA256 signature, expiration, booking confirmation status, and single-use check-in status
+        without mutating database state. Requires `SCANNER` or `ADMIN` role.
+      operationId: validateGateQR
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QRScanRequest"
+      responses:
+        "200":
+          description: Ticket admission details and validity flag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GateTicketView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/gate/check-in:
+    post:
+      tags: [Gate Scanner]
+      summary: Atomic single-use gate check-in
+      description: |
+        Atomically executes `UPDATE tickets SET is_checked_in = TRUE, checked_in_at = NOW() WHERE id = $1 AND is_checked_in = FALSE`.
+        The gate QR **expires immediately** after the first successful scan; any concurrent or subsequent scan receives
+        `409 Conflict` (`gate QR already scanned and expired`). Requires `SCANNER` or `ADMIN` role.
+      operationId: checkInGateTicket
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QRScanRequest"
+      responses:
+        "200":
+          description: Ticket checked in and gate QR permanently expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GateTicketView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/counter/menu:
+    get:
+      tags: [Bartender POS]
+      summary: List active F&B menu items
+      description: Returns all active bar/food items with authoritative server-side INR prices. Requires `BARTENDER` or `ADMIN` role.
+      operationId: getBarMenu
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Active menu catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MenuItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      tags: [Bartender POS]
+      summary: Add a new F&B menu item
+      description: Allows a bartender or admin to add a `DRINK` or `FOOD` item with an authoritative INR unit price.
+      operationId: createMenuItem
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMenuItemRequest"
+            example:
+              name: "Smoked Negroni"
+              category: DRINK
+              unit_price: 750
+      responses:
+        "201":
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MenuItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/counter/menu/{id}:
+    delete:
+      tags: [Bartender POS]
+      summary: Delete (soft-deactivate) a menu item
+      description: |
+        Soft-deletes (`is_active = FALSE`) a menu item so it can no longer be ordered while keeping every historical
+        `transaction_line_items` record 100% auditable. Requires `BARTENDER` or `ADMIN` role.
+      operationId: deleteMenuItem
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Menu Item UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Menu item deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, item]
+                properties:
+                  deleted:
+                    type: boolean
+                    example: true
+                  item:
+                    $ref: "#/components/schemas/MenuItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/counter/search:
+    get:
+      tags: [Bartender POS]
+      summary: Look up ticket & F&B wallet by 1D bartender barcode
+      description: |
+        Fast exact B-tree lookup on `tickets.bar_code` (`^[A-Z][0-9]{4}$`, e.g., `K4829`).
+        Returns remaining F&B wallet balance, `wallet_expired` flag (true after `event_ends_at`), guest roster
+        (including free-shot eligibility), and the 15 most recent traceable bar transactions.
+      operationId: searchTicketByBarCode
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: bar_code
+          in: query
+          required: true
+          description: 5-character 1D linear bartender barcode (1 letter + 4 digits). Alias `code` is also accepted.
+          schema:
+            type: string
+            pattern: "^[A-Z][0-9]{4}$"
+            example: "K4829"
+      responses:
+        "200":
+          description: Ticket wallet and recent bar transaction history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BarTicketSearchView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/counter/tickets/{bar_code}/history:
+    get:
+      tags: [Bartender POS]
+      summary: Get full traceable F&B transaction audit history for a ticket
+      description: Returns chronological bar transactions with `balance_before`, `balance_after`, `wallet_deducted`, `delta_to_collect`, bartender username, and per-item unit prices at time of sale.
+      operationId: getTicketBarHistory
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: bar_code
+          in: path
+          required: true
+          description: 5-character 1D linear bartender barcode
+          schema:
+            type: string
+            pattern: "^[A-Z][0-9]{4}$"
+            example: "K4829"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of transactions to return (1–100, default 50)
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Ticket F&B transaction ledger
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bar_code, transactions]
+                properties:
+                  bar_code:
+                    type: string
+                    example: "K4829"
+                  transactions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BarTransactionHistoryView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/counter/redeem:
+    post:
+      tags: [Bartender POS]
+      summary: Redeem F&B items against ticket wallet (hot path)
+      description: |
+        Highest-traffic endpoint designed for 100+ concurrent patrons and multiple simultaneous bartenders:
+        1. **Idempotency**: Supply `Idempotency-Key` header (or `idempotency_key` body field) so double-taps or retries
+           over venue Wi-Fi return the original receipt (`idempotent_replay: true`) without deducting twice.
+        2. **Zero-Trust Pricing**: Client submits only `menu_item_id` and `quantity`; prices are read from PostgreSQL `menu_items`.
+        3. **Concurrency Safety**: Acquires `SELECT ... FOR UPDATE OF t` on the ticket row via B-tree index `idx_tickets_bar_code`.
+        4. **Expiry Enforcement**: Automatically rejects with `409 Conflict` once `NOW() > events.ends_at`.
+        5. **Wallet Deduction + Counter Delta Note**: Deducts up to the remaining `food_balance`. Any remaining excess is
+           recorded as `delta_to_collect` (`upi_delta_paid`) for bartender reference at the counter without blocking the order.
+      operationId: redeemBarItems
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Unique client-generated request key (max 100 chars) preventing duplicate charges on retries.
+          schema:
+            type: string
+            maxLength: 100
+            example: "pos-bar1-9f8e7d6c5b4a"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedeemItemsRequest"
+            example:
+              bar_code: "K4829"
+              items:
+                - menu_item_id: 33333333-3333-3333-3333-333333333333
+                  quantity: 2
+      responses:
+        "200":
+          description: Redemption committed (or idempotently replayed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RedeemItemsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/admin/staff:
+    post:
+      tags: [Admin]
+      summary: Create a staff account
+      description: Creates a new `ADMIN`, `SCANNER`, or `BARTENDER` account with an Argon2id password hash. Requires `ADMIN` role.
+      operationId: createStaff
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffRequest"
+            example:
+              username: "bar_counter_1"
+              password: "BarPassword!2026"
+              role: BARTENDER
+      responses:
+        "201":
+          description: Staff account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAccountView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/admin/staff/{id}/password:
+    patch:
+      tags: [Admin]
+      summary: Rotate a staff member's password
+      description: Updates the staff Argon2id hash and immediately evicts the staff ID from `StaffRoleCache`. Requires `ADMIN` role.
+      operationId: updateStaffPassword
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Staff UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+      responses:
+        "200":
+          description: Password updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAccountView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/staff/{id}:
+    delete:
+      tags: [Admin]
+      summary: Deactivate a staff account
+      description: Sets `is_active = FALSE` and immediately evicts the user from `StaffRoleCache` so active tokens are rejected on the very next request. Admins cannot deactivate themselves.
+      operationId: deactivateStaff
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Staff UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Staff account deactivated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffAccountView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/bookings:
+    get:
+      tags: [Admin]
+      summary: List bookings for manual UPI payment verification
+      description: |
+        Returns bookings with both the patron-submitted `upi_transaction_id` (UTR) and the authoritative
+        `expected_amount` + `tier_base_price` so the Admin can verify payment accuracy before approving.
+        Defaults to `status=PENDING`.
+      operationId: listBookingsForVerification
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/BookingStatus"
+            default: PENDING
+        - name: event_id
+          in: query
+          required: false
+          description: Optional Event UUID filter
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+            default: 0
+      responses:
+        "200":
+          description: Verification queue
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bookings, count]
+                properties:
+                  bookings:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BookingVerificationItem"
+                  count:
+                    type: integer
+                    example: 12
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/bookings/{id}/verify:
+    post:
+      tags: [Admin]
+      summary: Approve or reject a pending UPI booking
+      description: |
+        Atomically transitions a `PENDING` booking under a row-level lock (`FOR UPDATE`):
+        - `APPROVE`: Requires a submitted `upi_transaction_id` (for paid bookings), sets status to `CONFIRMED`,
+          records `verified_by` and `verified_at`, and dispatches the rendered PNG ticket pass + confirmation message
+          to the patron's WhatsApp number via Meta WhatsApp Cloud API.
+        - `REJECT`: Sets status to `FAILED` with `rejection_reason`.
+      operationId: verifyBookingPayment
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyBookingRequest"
+            examples:
+              approve:
+                summary: Approve verified UPI payment
+                value:
+                  action: APPROVE
+              reject:
+                summary: Reject invalid or mismatched UTR
+                value:
+                  action: REJECT
+                  rejection_reason: "UTR not found in venue UPI settlement ledger"
+      responses:
+        "200":
+          description: Booking verification recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyBookingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/admin/events:
+    post:
+      tags: [Admin]
+      summary: Create an event
+      description: Creates a new nightclub/venue event with start and end timestamps (`ends_at` governs automatic F&B wallet expiry).
+      operationId: createEvent
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEventRequest"
+            example:
+              title: "Saturday Noir Showcase"
+              starts_at: "2026-12-05T15:30:00Z"
+              ends_at: "2026-12-05T22:30:00Z"
+              location: "The Velvet Room, Indiranagar"
+              status: ON_SALE
+      responses:
+        "201":
+          description: Event created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/admin/events/{id}/tiers:
+    post:
+      tags: [Admin]
+      summary: Create a general-admission ticket tier
+      description: |
+        Creates a GA ticket category for an event (`entry_count` must be `1`, `2`, `10`, or `15`).
+        `COUPLE` tiers strictly enforce `entry_count = 2` and `is_gender_strict = true` (1 MALE + 1 FEMALE).
+      operationId: createTicketTier
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Event UUID
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTicketTierRequest"
+            example:
+              name: "COUPLE"
+              category: "MAIN_FLOOR"
+              base_price: 3000
+              fnb_credit: 2000
+              entry_count: 2
+              is_gender_strict: true
+      responses:
+        "201":
+          description: Ticket tier created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketCategory"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/admin/stats/{event_id}:
+    get:
+      tags: [Admin]
+      summary: Get live event revenue, check-in, F&B, and gender analytics
+      description: Aggregates confirmed bookings, ticket revenue, gate check-ins, F&B allocated/redeemed/remaining, counter delta totals, gender demographics, and First-99 female stag utilization in parallel.
+      operationId: getEventStats
+      security:
+        - cookieAuth: []
+        - bearerAuth: []
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          description: Event UUID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Live event analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventStatsView"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: venu_access
+      description: Strictly isolated `HttpOnly; SameSite=Strict` staff access cookie set by `POST /api/auth/login`.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Staff access JWT returned by `POST /api/auth/login` for API testing tools and native POS scanners.
+
+  headers:
+    X-RateLimit-Limit:
+      description: Maximum requests allowed in the current sliding window
+      schema:
+        type: integer
+    X-RateLimit-Remaining:
+      description: Remaining requests in the current window
+      schema:
+        type: integer
+    X-RateLimit-Reset:
+      description: Unix timestamp when the current rate-limit window resets
+      schema:
+        type: integer
+    Retry-After:
+      description: Seconds to wait before retrying after a 429 response
+      schema:
+        type: integer
+
+  responses:
+    BadRequest:
+      description: Invalid request syntax or domain validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorPayload"
+          example:
+            error: "invalid request parameters"
+    Unauthorized:
+      description: Missing, invalid, or expired staff authentication or forged QR signature
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorPayload"
+          example:
+            error: "authentication required"
+    Forbidden:
+      description: Authenticated staff role lacks permission or cross-site origin rejected
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorPayload"
+          example:
+            error: "insufficient permissions for this operation"
+    NotFound:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorPayload"
+          example:
+            error: "resource not found"
+    Conflict:
+      description: State conflict (duplicate UTR, already checked in, expired wallet, or already verified booking)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorPayload"
+          example:
+            error: "gate QR already scanned and expired"
+    TooManyRequests:
+      description: PostgreSQL-backed rate limit exceeded
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/Retry-After"
+        X-RateLimit-Limit:
+          $ref: "#/components/headers/X-RateLimit-Limit"
+        X-RateLimit-Remaining:
+          $ref: "#/components/headers/X-RateLimit-Remaining"
+        X-RateLimit-Reset:
+          $ref: "#/components/headers/X-RateLimit-Reset"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorPayload"
+          example:
+            error: "rate limit exceeded; please retry shortly"
+
+  schemas:
+    ErrorPayload:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    StaffRole:
+      type: string
+      enum: [ADMIN, SCANNER, BARTENDER]
+
+    EventStatus:
+      type: string
+      enum: [DRAFT, ON_SALE, SOLD_OUT, ENDED]
+
+    BookingStatus:
+      type: string
+      enum: [PENDING, CONFIRMED, FAILED]
+
+    GenderType:
+      type: string
+      enum: [MALE, FEMALE, OTHER]
+
+    MenuCategory:
+      type: string
+      enum: [DRINK, FOOD]
+
+    StaffSummary:
+      type: object
+      required: [id, username, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        role:
+          $ref: "#/components/schemas/StaffRole"
+
+    StaffSessionResponse:
+      type: object
+      required: [staff, access_token, expires_at]
+      properties:
+        staff:
+          $ref: "#/components/schemas/StaffSummary"
+        access_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    CreateStaffRequest:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 100
+        password:
+          type: string
+          format: password
+          minLength: 8
+        role:
+          $ref: "#/components/schemas/StaffRole"
+
+    StaffAccountView:
+      type: object
+      required: [id, username, role, is_active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        role:
+          $ref: "#/components/schemas/StaffRole"
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    EventTierView:
+      type: object
+      required:
+        - id
+        - name
+        - base_price
+        - effective_price
+        - fnb_credit
+        - entry_count
+        - is_gender_strict
+        - first_99_applied
+        - includes_free_shot
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: STAG_FEMALE
+        category:
+          type: string
+          example: MAIN_FLOOR
+        base_price:
+          type: integer
+          format: int32
+          example: 1500
+        effective_price:
+          type: integer
+          format: int32
+          example: 0
+        fnb_credit:
+          type: integer
+          format: int32
+          example: 0
+        entry_count:
+          type: integer
+          format: int32
+          enum: [1, 2, 10, 15]
+        is_gender_strict:
+          type: boolean
+        first_99_applied:
+          type: boolean
+        free_slots_remaining:
+          type: integer
+          format: int64
+          example: 42
+        includes_free_shot:
+          type: boolean
+
+    EventDetailsView:
+      type: object
+      required: [id, title, starts_at, ends_at, location, status, upi_vpa, upi_merchant_name, tiers]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        location:
+          type: string
+        status:
+          $ref: "#/components/schemas/EventStatus"
+        upi_vpa:
+          type: string
+          example: "venu.events@upi"
+        upi_merchant_name:
+          type: string
+          example: "Venu Live"
+        upi_qr_image_url:
+          type: string
+          format: uri
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/EventTierView"
+
+    GuestInput:
+      type: object
+      required: [name, age, gender]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        age:
+          type: integer
+          format: int32
+          minimum: 18
+          maximum: 120
+        gender:
+          $ref: "#/components/schemas/GenderType"
+        is_primary_contact:
+          type: boolean
+          default: false
+
+    GuestView:
+      type: object
+      required: [id, name, age, gender, is_primary_contact, free_shot_redeemed]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        age:
+          type: integer
+          format: int32
+        gender:
+          $ref: "#/components/schemas/GenderType"
+        is_primary_contact:
+          type: boolean
+        free_shot_redeemed:
+          type: boolean
+
+    InitCheckoutRequest:
+      type: object
+      required: [event_id, category_id, contact_phone, contact_email, guests]
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        category_id:
+          type: string
+          format: uuid
+        contact_phone:
+          type: string
+          minLength: 10
+          maxLength: 20
+        contact_email:
+          type: string
+          format: email
+        upi_transaction_id:
+          type: string
+          minLength: 8
+          maxLength: 40
+          description: Optional UPI UTR submitted directly at checkout; can also be supplied via POST /api/checkout/{booking_id}/upi-reference.
+        guests:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/GuestInput"
+
+    UPIPaymentInstructions:
+      type: object
+      required: [vpa, merchant_name, amount_inr, intent_uri]
+      properties:
+        vpa:
+          type: string
+          example: "venu.events@upi"
+        merchant_name:
+          type: string
+          example: "Venu Live"
+        amount_inr:
+          type: integer
+          format: int32
+          example: 3000
+        intent_uri:
+          type: string
+          example: "upi://pay?am=3000.00&cu=INR&pa=venu.events%40upi&pn=Venu+Live&tn=Venu+a1b2c3d4"
+        qr_image_url:
+          type: string
+          format: uri
+
+    InitCheckoutResponse:
+      type: object
+      required: [booking_id, ticket_id, status, total_amount, currency, fnb_credit, entry_count, first_99_applied]
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+        ticket_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        total_amount:
+          type: integer
+          format: int32
+        currency:
+          type: string
+          example: INR
+        fnb_credit:
+          type: integer
+          format: int32
+        entry_count:
+          type: integer
+          format: int32
+        first_99_applied:
+          type: boolean
+        upi_transaction_id:
+          type: string
+        upi_payment:
+          $ref: "#/components/schemas/UPIPaymentInstructions"
+        ticket_url:
+          type: string
+          format: uri
+        ticket_image_url:
+          type: string
+          format: uri
+        bar_code:
+          type: string
+          pattern: "^[A-Z][0-9]{4}$"
+        gate_qr_token:
+          type: string
+
+    PublicTicketView:
+      type: object
+      required:
+        - id
+        - booking_id
+        - event_id
+        - booking_status
+        - event_title
+        - event_starts_at
+        - event_ends_at
+        - event_location
+        - category_name
+        - entry_count
+        - total_amount
+        - food_balance
+        - initial_food_balance
+        - fnb_expired
+        - is_checked_in
+        - guests
+      properties:
+        id:
+          type: string
+          format: uuid
+        booking_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        booking_status:
+          $ref: "#/components/schemas/BookingStatus"
+        event_title:
+          type: string
+        event_starts_at:
+          type: string
+          format: date-time
+        event_ends_at:
+          type: string
+          format: date-time
+        event_location:
+          type: string
+        category_name:
+          type: string
+        category_tier:
+          type: string
+        entry_count:
+          type: integer
+          format: int32
+        total_amount:
+          type: integer
+          format: int32
+        bar_code:
+          type: string
+          pattern: "^[A-Z][0-9]{4}$"
+          description: Multi-use 5-character 1D Code-39 linear bartender barcode (present when CONFIRMED).
+        bar_code_format:
+          type: string
+          example: CODE39_1D
+        gate_qr_token:
+          type: string
+          description: Single-use HMAC-SHA256 gate QR token (omitted immediately once `is_checked_in` is true).
+        ticket_image_url:
+          type: string
+          format: uri
+        food_balance:
+          type: integer
+          format: int32
+        initial_food_balance:
+          type: integer
+          format: int32
+        fnb_expired:
+          type: boolean
+        is_checked_in:
+          type: boolean
+        checked_in_at:
+          type: string
+          format: date-time
+        guests:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuestView"
+
+    QRScanRequest:
+      type: object
+      required: [qr_token]
+      properties:
+        qr_token:
+          type: string
+          description: HMAC-SHA256 signed single-use gate QR token
+
+    GateTicketView:
+      type: object
+      required:
+        - valid
+        - ticket_id
+        - event_id
+        - event_title
+        - event_starts_at
+        - event_ends_at
+        - event_location
+        - category_name
+        - entry_count
+        - booking_status
+        - is_checked_in
+        - guests
+      properties:
+        valid:
+          type: boolean
+        reason:
+          type: string
+          example: checked_in_gate_qr_expired
+        ticket_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        event_title:
+          type: string
+        event_starts_at:
+          type: string
+          format: date-time
+        event_ends_at:
+          type: string
+          format: date-time
+        event_location:
+          type: string
+        category_name:
+          type: string
+        category_tier:
+          type: string
+        entry_count:
+          type: integer
+          format: int32
+        booking_status:
+          $ref: "#/components/schemas/BookingStatus"
+        is_checked_in:
+          type: boolean
+        checked_in_at:
+          type: string
+          format: date-time
+        guests:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuestView"
+
+    MenuItem:
+      type: object
+      required: [id, name, category, unit_price, is_active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          $ref: "#/components/schemas/MenuCategory"
+        unit_price:
+          type: integer
+          format: int32
+        is_active:
+          type: boolean
+
+    CreateMenuItemRequest:
+      type: object
+      required: [name, category, unit_price]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        category:
+          $ref: "#/components/schemas/MenuCategory"
+        unit_price:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 1000000
+
+    BarLineItemHistoryView:
+      type: object
+      required: [menu_item_id, menu_item_name, quantity, unit_price_at_sale, line_total]
+      properties:
+        menu_item_id:
+          type: string
+          format: uuid
+        menu_item_name:
+          type: string
+        quantity:
+          type: integer
+          format: int32
+        unit_price_at_sale:
+          type: integer
+          format: int32
+        line_total:
+          type: integer
+          format: int32
+
+    BarTransactionHistoryView:
+      type: object
+      required:
+        - transaction_id
+        - bartender_id
+        - bartender_username
+        - total_bill
+        - wallet_deducted
+        - delta_to_collect
+        - balance_before
+        - balance_after
+        - created_at
+        - items
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+        bartender_id:
+          type: string
+          format: uuid
+        bartender_username:
+          type: string
+        total_bill:
+          type: integer
+          format: int32
+        wallet_deducted:
+          type: integer
+          format: int32
+        delta_to_collect:
+          type: integer
+          format: int32
+          description: Excess amount beyond F&B wallet balance noted for bartender counter collection reference.
+        balance_before:
+          type: integer
+          format: int32
+        balance_after:
+          type: integer
+          format: int32
+        created_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BarLineItemHistoryView"
+
+    BarTicketSearchView:
+      type: object
+      required:
+        - ticket_id
+        - event_id
+        - event_title
+        - event_ends_at
+        - bar_code
+        - category_name
+        - entry_count
+        - food_balance
+        - initial_food_balance
+        - wallet_expired
+        - is_checked_in
+        - guests
+        - recent_transactions
+      properties:
+        ticket_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        event_title:
+          type: string
+        event_ends_at:
+          type: string
+          format: date-time
+        bar_code:
+          type: string
+          pattern: "^[A-Z][0-9]{4}$"
+        category_name:
+          type: string
+        category_tier:
+          type: string
+        entry_count:
+          type: integer
+          format: int32
+        food_balance:
+          type: integer
+          format: int32
+        initial_food_balance:
+          type: integer
+          format: int32
+        wallet_expired:
+          type: boolean
+        is_checked_in:
+          type: boolean
+        guests:
+          type: array
+          items:
+            $ref: "#/components/schemas/GuestView"
+        recent_transactions:
+          type: array
+          items:
+            $ref: "#/components/schemas/BarTransactionHistoryView"
+
+    RedeemLineItemInput:
+      type: object
+      required: [menu_item_id, quantity]
+      properties:
+        menu_item_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int32
+          minimum: 1
+          maximum: 50
+
+    RedeemItemsRequest:
+      type: object
+      required: [bar_code, items]
+      properties:
+        bar_code:
+          type: string
+          pattern: "^[A-Z][0-9]{4}$"
+          example: "K4829"
+        items:
+          type: array
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/RedeemLineItemInput"
+        idempotency_key:
+          type: string
+          maxLength: 100
+          description: Optional fallback if `Idempotency-Key` HTTP header is omitted.
+        redeem_free_shot_guest_id:
+          type: string
+          format: uuid
+          description: Optional female guest UUID redeeming their complimentary shot.
+
+    RedeemItemsResponse:
+      type: object
+      required:
+        - transaction_id
+        - ticket_id
+        - bar_code
+        - total_bill
+        - wallet_deducted
+        - delta_to_collect
+        - balance_before
+        - remaining_balance
+        - free_shot_redeemed
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+        ticket_id:
+          type: string
+          format: uuid
+        bar_code:
+          type: string
+          example: "K4829"
+        total_bill:
+          type: integer
+          format: int32
+          example: 1500
+        wallet_deducted:
+          type: integer
+          format: int32
+          example: 1000
+        delta_to_collect:
+          type: integer
+          format: int32
+          example: 500
+          description: Excess INR noted for bartender counter collection reference.
+        balance_before:
+          type: integer
+          format: int32
+          example: 1000
+        remaining_balance:
+          type: integer
+          format: int32
+          example: 0
+        free_shot_redeemed:
+          type: boolean
+        idempotent_replay:
+          type: boolean
+
+    BookingVerificationItem:
+      type: object
+      required:
+        - booking_id
+        - ticket_id
+        - event_id
+        - event_title
+        - category_name
+        - entry_count
+        - expected_amount
+        - tier_base_price
+        - fnb_credit
+        - status
+        - contact_phone
+        - contact_email
+        - bar_code
+        - created_at
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+        ticket_id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        event_title:
+          type: string
+        category_name:
+          type: string
+        category_tier:
+          type: string
+        entry_count:
+          type: integer
+          format: int32
+        expected_amount:
+          type: integer
+          format: int32
+        tier_base_price:
+          type: integer
+          format: int32
+        fnb_credit:
+          type: integer
+          format: int32
+        upi_transaction_id:
+          type: string
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        contact_phone:
+          type: string
+        contact_email:
+          type: string
+          format: email
+        bar_code:
+          type: string
+          pattern: "^[A-Z][0-9]{4}$"
+        rejection_reason:
+          type: string
+        verified_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    VerifyBookingRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [APPROVE, REJECT]
+        rejection_reason:
+          type: string
+          description: Optional explanation stored when `action` is `REJECT`.
+
+    VerifyBookingResponse:
+      type: object
+      required: [booking_id, ticket_id, status, expected_amount, whatsapp_queued, verified_at]
+      properties:
+        booking_id:
+          type: string
+          format: uuid
+        ticket_id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/BookingStatus"
+        expected_amount:
+          type: integer
+          format: int32
+        upi_transaction_id:
+          type: string
+        whatsapp_queued:
+          type: boolean
+        verified_at:
+          type: string
+          format: date-time
+
+    CreateEventRequest:
+      type: object
+      required: [title, starts_at, ends_at, location]
+      properties:
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        location:
+          type: string
+        status:
+          $ref: "#/components/schemas/EventStatus"
+          default: DRAFT
+
+    Event:
+      type: object
+      required: [id, title, starts_at, ends_at, location, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        location:
+          type: string
+        status:
+          $ref: "#/components/schemas/EventStatus"
+
+    CreateTicketTierRequest:
+      type: object
+      required: [name, base_price, fnb_credit, entry_count]
+      properties:
+        name:
+          type: string
+          example: COUPLE
+        category:
+          type: string
+          example: MAIN_FLOOR
+        base_price:
+          type: integer
+          format: int32
+          minimum: 0
+        fnb_credit:
+          type: integer
+          format: int32
+          minimum: 0
+        entry_count:
+          type: integer
+          format: int32
+          enum: [1, 2, 10, 15]
+        is_gender_strict:
+          type: boolean
+          default: false
+
+    TicketCategory:
+      type: object
+      required: [id, event_id, name, base_price, fnb_credit, entry_count, is_gender_strict]
+      properties:
+        id:
+          type: string
+          format: uuid
+        event_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        base_price:
+          type: integer
+          format: int32
+        fnb_credit:
+          type: integer
+          format: int32
+        entry_count:
+          type: integer
+          format: int32
+        is_gender_strict:
+          type: boolean
+
+    EventStatsView:
+      type: object
+      required:
+        - event_id
+        - event_title
+        - confirmed_bookings
+        - ticket_revenue
+        - total_tickets
+        - checked_in_tickets
+        - total_fnb_allocated
+        - total_fnb_redeemed
+        - total_fnb_remaining
+        - bar_transactions
+        - total_bar_bill
+        - total_wallet_deducted
+        - total_counter_delta
+        - total_guests
+        - male_guests
+        - female_guests
+        - other_guests
+        - free_shots_redeemed
+        - confirmed_female_stags
+      properties:
+        event_id:
+          type: string
+          format: uuid
+        event_title:
+          type: string
+        confirmed_bookings:
+          type: integer
+          format: int64
+        ticket_revenue:
+          type: integer
+          format: int64
+        total_tickets:
+          type: integer
+          format: int64
+        checked_in_tickets:
+          type: integer
+          format: int64
+        total_fnb_allocated:
+          type: integer
+          format: int64
+        total_fnb_redeemed:
+          type: integer
+          format: int64
+        total_fnb_remaining:
+          type: integer
+          format: int64
+        bar_transactions:
+          type: integer
+          format: int64
+        total_bar_bill:
+          type: integer
+          format: int64
+        total_wallet_deducted:
+          type: integer
+          format: int64
+        total_counter_delta:
+          type: integer
+          format: int64
+        total_guests:
+          type: integer
+          format: int64
+        male_guests:
+          type: integer
+          format: int64
+        female_guests:
+          type: integer
+          format: int64
+        other_guests:
+          type: integer
+          format: int64
+        free_shots_redeemed:
+          type: integer
+          format: int64
+        confirmed_female_stags:
+          type: integer
+          format: int64

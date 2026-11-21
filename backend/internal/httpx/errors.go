@@ -14,6 +14,7 @@ type AppError struct {
 	Status  int
 	Message string
 	Err     error
+	Details map[string]any
 }
 
 func (e *AppError) Error() string {
@@ -49,7 +50,8 @@ func NewConflict(msg string, err error) *AppError {
 
 // ErrorPayload matches exact backend error contract: {"error": "message"}
 type ErrorPayload struct {
-	Error string `json:"error"`
+	Error   string         `json:"error"`
+	Details map[string]any `json:"details,omitempty"`
 }
 
 // HandleError translates domain, pgx, and context timeout errors into JSON once at the handler boundary.
@@ -65,7 +67,7 @@ func HandleError(w http.ResponseWriter, r *http.Request, logger *slog.Logger, er
 		} else {
 			logger.WarnContext(r.Context(), "request rejected", "path", r.URL.Path, "status", appErr.Status, "error", err)
 		}
-		_ = WriteJSON(w, appErr.Status, ErrorPayload{Error: appErr.Message})
+		_ = WriteJSON(w, appErr.Status, ErrorPayload{Error: appErr.Message, Details: appErr.Details})
 		return
 	}
 

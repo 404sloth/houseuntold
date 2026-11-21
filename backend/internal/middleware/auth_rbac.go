@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/venu-live/venu-api/internal/auth"
+	"github.com/venu-live/venu-api/internal/cache"
 	"github.com/venu-live/venu-api/internal/db"
 	"github.com/venu-live/venu-api/internal/httpx"
 )
@@ -17,56 +18,101 @@ type ctxKey string
 const (
 	AccessCookieName  = "venu_access"
 	RefreshCookieName = "venu_refresh"
-	userContextKey    = ctxKey("venu_auth_user")
-	userIDContextKey  = ctxKey("venu_auth_user_id")
-	roleContextKey    = ctxKey("venu_auth_role")
+	staffContextKey   = ctxKey("venu_auth_staff")
+	staffIDContextKey = ctxKey("venu_auth_staff_id")
+	staffRoleCtxKey   = ctxKey("venu_auth_staff_role")
 )
 
-func ContextWithAuth(ctx context.Context, user db.User) context.Context {
-	ctx = context.WithValue(ctx, userContextKey, user)
-	ctx = context.WithValue(ctx, userIDContextKey, user.ID)
-	ctx = context.WithValue(ctx, roleContextKey, user.Role)
+func ContextWithStaff(ctx context.Context, staff db.StaffAccount) context.Context {
+	ctx = context.WithValue(ctx, staffContextKey, staff)
+	ctx = context.WithValue(ctx, staffIDContextKey, staff.ID)
+	ctx = context.WithValue(ctx, staffRoleCtxKey, staff.Role)
 	return ctx
 }
 
-func UserFromContext(ctx context.Context) (db.User, bool) {
-	u, ok := ctx.Value(userContextKey).(db.User)
-	return u, ok
+func StaffFromContext(ctx context.Context) (db.StaffAccount, bool) {
+	s, ok := ctx.Value(staffContextKey).(db.StaffAccount)
+	return s, ok
 }
 
-func UserIDFromContext(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(userIDContextKey).(uuid.UUID)
+func StaffIDFromContext(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(staffIDContextKey).(uuid.UUID)
 	return id, ok
 }
 
-func RoleFromContext(ctx context.Context) (db.UserRole, bool) {
-	r, ok := ctx.Value(roleContextKey).(db.UserRole)
+func RoleFromContext(ctx context.Context) (db.StaffRole, bool) {
+	r, ok := ctx.Value(staffRoleCtxKey).(db.StaffRole)
 	return r, ok
 }
 
 type RBAC struct {
-	tokens    *auth.TokenManager
-	queries   db.Querier
-	dbTimeout time.Duration
+	tokens         *auth.TokenManager
+	queries        db.Querier
+	roleCache      *cache.StaffRoleCache
+	dbTimeout      time.Duration
+	allowedOrigins map[string]struct{}
 }
 
-func NewRBAC(tokens *auth.TokenManager, queries db.Querier, dbTimeout time.Duration) *RBAC {
+func NewRBAC(
+	tokens *auth.TokenManager,
+	queries db.Querier,
+	roleCache *cache.StaffRoleCache,
+	dbTimeout time.Duration,
+	allowedOrigins []string,
+) *RBAC {
 	if dbTimeout <= 0 {
 		dbTimeout = 3 * time.Second
 	}
-	return &RBAC{tokens: tokens, queries: queries, dbTimeout: dbTimeout}
+	originSet := make(map[string]struct{}, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		if trimmed := strings.TrimSpace(o); trimmed != "" && trimmed != "*" {
+			originSet[trimmed] = struct{}{}
+		}
+	}
+	return &RBAC{
+		tokens:         tokens,
+		queries:        queries,
+		roleCache:      roleCache,
+		dbTimeout:      dbTimeout,
+		allowedOrigins: originSet,
+	}
 }
 
-// Authenticate validates the access JWT from HTTP-only cookie or Bearer header,
-// performs an authoritative sqlc lookup within DB timeout, and injects UserID & Role into context.
+// SecurityHeaders prevents cross-origin token/role leakage, clickjacking, MIME sniffing, and proxy caching.
+func SecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+		w.Header().Set("Cross-Origin-Opener-Policy", "same-origin")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+		w.Header().Set("Pragma", "no-cache")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// Authenticate validates the staff access JWT on every request, enforces CSRF origin checks on
+// cookie-authenticated mutations, and verifies the staff account & role against the server-side
+// StaffRoleCache (backed by PostgreSQL with 3s timeout on cache miss).
 func (rb *RBAC) Authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rawToken := extractAccessToken(r)
+		rawToken, fromCookie := extractAccessToken(r)
 		if rawToken == "" {
 			_ = httpx.WriteJSON(w, http.StatusUnauthorized, httpx.ErrorPayload{
 				Error: "authentication required",
 			})
 			return
+		}
+
+		if fromCookie && isMutatingMethod(r.Method) {
+			if !rb.verifyCSRFOrigin(r) {
+				_ = httpx.WriteJSON(w, http.StatusForbidden, httpx.ErrorPayload{
+					Error: "cross-site request origin rejected",
+				})
+				return
+			}
 		}
 
 		claims, err := rb.tokens.VerifyAccessToken(rawToken)
@@ -77,26 +123,55 @@ func (rb *RBAC) Authenticate(next http.Handler) http.Handler {
 			return
 		}
 
-		ctx, cancel := context.WithTimeout(r.Context(), rb.dbTimeout)
-		defer cancel()
-
-		user, err := rb.queries.GetUserByID(ctx, claims.UserID)
-		if err != nil || !user.IsActive {
+		staff, ok := rb.lookupVerifiedStaff(r.Context(), claims.StaffID)
+		if !ok || !staff.IsActive {
 			_ = httpx.WriteJSON(w, http.StatusUnauthorized, httpx.ErrorPayload{
-				Error: "user account unavailable",
+				Error: "staff account inactive or unavailable",
 			})
 			return
 		}
 
-		next.ServeHTTP(w, r.WithContext(ContextWithAuth(r.Context(), user)))
+		// Defense-in-depth: ensure the token role matches the authoritative server-cached DB role.
+		if staff.Role != claims.Role {
+			if rb.roleCache != nil {
+				rb.roleCache.Invalidate(staff.ID)
+			}
+			_ = httpx.WriteJSON(w, http.StatusUnauthorized, httpx.ErrorPayload{
+				Error: "role mismatch; please sign in again",
+			})
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(ContextWithStaff(r.Context(), staff)))
 	})
 }
 
-// RequireRole enforces strict RBAC against the role stored in context on every request.
+func (rb *RBAC) lookupVerifiedStaff(ctx context.Context, staffID uuid.UUID) (db.StaffAccount, bool) {
+	if rb.roleCache != nil {
+		if cached, hit := rb.roleCache.Get(staffID); hit {
+			return cached, true
+		}
+	}
+
+	qctx, cancel := context.WithTimeout(ctx, rb.dbTimeout)
+	defer cancel()
+
+	staff, err := rb.queries.GetStaffByID(qctx, staffID)
+	if err != nil {
+		return db.StaffAccount{}, false
+	}
+
+	if rb.roleCache != nil && staff.IsActive {
+		rb.roleCache.Set(staff)
+	}
+	return staff, true
+}
+
+// RequireRole enforces strict RBAC against the authoritative server-verified role on every request.
 func (rb *RBAC) RequireRole(allowed ...string) func(http.Handler) http.Handler {
-	allowedSet := make(map[db.UserRole]struct{}, len(allowed))
+	allowedSet := make(map[db.StaffRole]struct{}, len(allowed))
 	for _, role := range allowed {
-		allowedSet[db.UserRole(role)] = struct{}{}
+		allowedSet[db.StaffRole(role)] = struct{}{}
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -124,16 +199,19 @@ func (rb *RBAC) RequireRole(allowed ...string) func(http.Handler) http.Handler {
 func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 	originSet := make(map[string]struct{}, len(allowedOrigins))
 	for _, o := range allowedOrigins {
-		originSet[o] = struct{}{}
+		trimmed := strings.TrimSpace(o)
+		if trimmed != "" && trimmed != "*" {
+			originSet[trimmed] = struct{}{}
+		}
 	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
+			origin := strings.TrimSpace(r.Header.Get("Origin"))
 			if _, ok := originSet[origin]; ok {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
 				w.Header().Set("Access-Control-Allow-Credentials", "true")
-				w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Razorpay-Signature")
+				w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, Idempotency-Key, X-Requested-With")
 				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 				w.Header().Set("Vary", "Origin")
 			}
@@ -146,14 +224,39 @@ func CORS(allowedOrigins []string) func(http.Handler) http.Handler {
 	}
 }
 
-func extractAccessToken(r *http.Request) string {
+func extractAccessToken(r *http.Request) (token string, fromCookie bool) {
 	if authHeader := strings.TrimSpace(r.Header.Get("Authorization")); authHeader != "" {
 		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
-			return strings.TrimSpace(authHeader[7:])
+			return strings.TrimSpace(authHeader[7:]), false
 		}
 	}
 	if cookie, err := r.Cookie(AccessCookieName); err == nil && cookie.Value != "" {
-		return cookie.Value
+		return cookie.Value, true
 	}
-	return ""
+	return "", false
+}
+
+func isMutatingMethod(method string) bool {
+	switch method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+func (rb *RBAC) verifyCSRFOrigin(r *http.Request) bool {
+	secFetchSite := strings.ToLower(strings.TrimSpace(r.Header.Get("Sec-Fetch-Site")))
+	if secFetchSite == "cross-site" {
+		return false
+	}
+	if strings.TrimSpace(r.Header.Get("X-Requested-With")) != "" {
+		return true
+	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return secFetchSite == "same-origin"
+	}
+	_, ok := rb.allowedOrigins[origin]
+	return ok
 }
